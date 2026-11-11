@@ -800,7 +800,8 @@ final class WorldScene: SKScene {
         successHaptic.notificationOccurred(.success)
         showBanner("Coup spécial !")
         let strike = SKAction.run { [weak self] in self?.attack() }
-        run(.sequence([strike, .wait(forDuration: 0.25), strike, .wait(forDuration: 0.25), strike,
+        let gap = 0.25 / (1 + max(game.speedBonus, 0))
+        run(.sequence([strike, .wait(forDuration: gap), strike, .wait(forDuration: gap), strike,
                        .wait(forDuration: 0.3), .run { [weak self, weak target] in
             guard let self, let target else { return }
             self.hpFill.run(.scaleX(to: 0.02, duration: 0.2))
@@ -867,20 +868,22 @@ final class WorldScene: SKScene {
     @discardableResult
     private func attack() -> TimeInterval {
         guard let target = encounter else { return 0 }
+        // Un héros rapide (bottes, archer) frappe d'autant plus vite : toute l'attaque est accélérée.
+        let tempo = 1 / (1 + max(game.speedBonus, 0))
         let frames = heroFrames("attack")
-        hero.run(.sequence([.animate(with: frames, timePerFrame: 0.07), .setTexture(frames[0])]), withKey: "anim")
+        hero.run(.sequence([.animate(with: frames, timePerFrame: 0.07 * tempo), .setTexture(frames[0])]), withKey: "anim")
         let aim = CGPoint(x: encounterPosition.x, y: encounterPosition.y + encounterLift + min(target.size.height * 0.5, 54))
         let hand = CGPoint(x: heroPosition.x + hero.size.width * 0.3, y: heroPosition.y + hero.size.height * 0.55)
         let impact: TimeInterval
 
         switch game.heroLook {
         case .warrior:
-            impact = 0.14
+            impact = 0.14 * tempo
             let reach = max(encounterPosition.x - heroPosition.x - target.size.width * 0.35 - 60, 20)
             hero.run(.sequence([
-                .moveTo(x: heroPosition.x + reach, duration: 0.12),
-                .wait(forDuration: 0.12),
-                .moveTo(x: heroPosition.x, duration: 0.16),
+                .moveTo(x: heroPosition.x + reach, duration: 0.12 * tempo),
+                .wait(forDuration: 0.12 * tempo),
+                .moveTo(x: heroPosition.x, duration: 0.16 * tempo),
             ]), withKey: "dash")
             let slash = SKSpriteNode(texture: Self.texture("fx_slash"), size: CGSize(width: 64, height: 56))
             slash.position = aim
@@ -890,7 +893,7 @@ final class WorldScene: SKScene {
                                  .group([.scale(to: 1.25, duration: 0.18), .fadeOut(withDuration: 0.18)]),
                                  .removeFromParent()]))
         case .archer:
-            impact = 0.3
+            impact = 0.3 * tempo
             let arrow = SKShapeNode(rectOf: CGSize(width: 26, height: 3), cornerRadius: 1)
             arrow.fillColor = UIColor(red: 0.85, green: 0.75, blue: 0.55, alpha: 1)
             arrow.strokeColor = UIColor(red: 0.25, green: 0.18, blue: 0.10, alpha: 1)
@@ -899,17 +902,17 @@ final class WorldScene: SKScene {
             arrow.zRotation = atan2(aim.y - hand.y, aim.x - hand.x)
             arrow.alpha = 0
             effects.addChild(arrow)
-            arrow.run(.sequence([.wait(forDuration: 0.18), .fadeIn(withDuration: 0),
-                                 .move(to: aim, duration: 0.12), .removeFromParent()]))
+            arrow.run(.sequence([.wait(forDuration: 0.18 * tempo), .fadeIn(withDuration: 0),
+                                 .move(to: aim, duration: 0.12 * tempo), .removeFromParent()]))
         case .mage:
-            impact = 0.32
+            impact = 0.32 * tempo
             let bolt = SKSpriteNode(texture: Self.texture("fx_fireball"), size: CGSize(width: 46, height: 20))
             bolt.position = CGPoint(x: hand.x + 30, y: hand.y + 14)
             bolt.zRotation = atan2(aim.y - bolt.position.y, aim.x - bolt.position.x)
             bolt.alpha = 0
             effects.addChild(bolt)
-            bolt.run(.sequence([.wait(forDuration: 0.16), .fadeIn(withDuration: 0),
-                                .move(to: aim, duration: 0.16), .removeFromParent()]))
+            bolt.run(.sequence([.wait(forDuration: 0.16 * tempo), .fadeIn(withDuration: 0),
+                                .move(to: aim, duration: 0.16 * tempo), .removeFromParent()]))
         }
 
         run(.sequence([.wait(forDuration: impact), .run { [weak self, weak target] in
