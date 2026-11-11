@@ -144,6 +144,17 @@ struct ContentView: View {
         .padding(.top, 22)
         // Replié, le panneau montre son haut : l'activité et les signes vitaux.
         .frame(maxHeight: .infinity, alignment: .top)
+        // Un exploit récupéré : la fête recouvre le panneau, là où l'on vient de toucher.
+        .overlay {
+            if let celebration = game.celebration {
+                CelebrationView(celebration: celebration) {
+                    guard game.celebration?.id == celebration.id else { return }
+                    withAnimation(.easeOut(duration: 0.3)) { game.celebration = nil }
+                }
+                .id(celebration.id)
+            }
+        }
+        .animation(.easeOut(duration: 0.25), value: game.celebration)
         .onChange(of: tab) { _, newTab in
             if newTab == .gear { game.markLootSeen() }
         }

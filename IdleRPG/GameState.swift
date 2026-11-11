@@ -123,6 +123,8 @@ final class GameState {
     var awayReport: AwayReport?
 
     @ObservationIgnored var onEvent: ((GameEvent) -> Void)?
+    /// Récompense à fêter à l'écran, puis effacée par l'interface.
+    var celebration: Celebration?
     @ObservationIgnored private(set) var clock: TimeInterval = 0
     @ObservationIgnored private var lastTick = Date()
     @ObservationIgnored private var lastUIRefresh = Date.distantPast
@@ -870,6 +872,8 @@ final class GameState {
         guard isClaimable(achievement) else { return }
         claimedAchievements.insert(achievement.rawValue)
         gold += achievement.reward
+        celebration = Celebration(symbol: achievement.symbol, headline: "Succès débloqué",
+                                  title: achievement.title, gold: achievement.reward)
         log(achievement.symbol, "Succès « \(achievement.title) » : +\(achievement.reward.short) or.", .good)
         refreshUI()
         save()
@@ -888,6 +892,8 @@ final class GameState {
         guard isClaimable(kind) else { return }
         questClaimed.insert(kind.rawValue)
         gold += questReward
+        celebration = Celebration(symbol: kind.symbol, headline: "Quête accomplie",
+                                  title: kind.title, gold: questReward)
         cheer(5)
         log(kind.symbol, "Quête du jour accomplie : +\(questReward.short) or.", .good)
         refreshUI()
