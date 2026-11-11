@@ -64,7 +64,7 @@ La mort est **définitive**. Une fuite qui rate, un héros oublié qui meurt de 
 
 - **SwiftUI** pour l'interface (Liquid Glass, iOS 26), **SpriteKit** pour les scènes.
 - **Simulation reproductible** : tout le hasard des règles passe par un générateur à graine (`SeededGenerator`). Le jeu peut donc rejouer l'avenir sur une copie de lui-même pour programmer les notifications et l'activité en direct au bon moment.
-- **ActivityKit** et **WidgetKit** pour l'activité en direct et les widgets (extension `IdleRPGWidgets`). Les widgets ne pouvant pas être réveillés par le jeu, celui-ci rejoue la journée à venir et écrit d'avance une image du héros toutes les dix minutes dans un groupe d'apps partagé (`group.com.idlerpg.prototype`).
+- **ActivityKit** et **WidgetKit** pour l'activité en direct et les widgets (extension `IdleRPGWidgets`). Les widgets ne pouvant pas être réveillés par le jeu, celui-ci rejoue la journée à venir et écrit d'avance une image du héros toutes les dix minutes dans un groupe d'apps partagé (`group.com.guillaumeprost.campfirecrawlers`).
 - Sauvegarde locale dans `UserDefaults`, compatible avec les anciennes versions.
 
 ### Organisation

@@ -59,7 +59,7 @@ struct HeroWidgetData: Codable, Hashable {
     var frames: [Frame]
     var upcoming: [Upcoming]
 
-    static let group = "group.com.idlerpg.prototype"
+    static let group = "group.com.guillaumeprost.campfirecrawlers"
     private static let key = "heroWidgetData"
 
     static func load() -> HeroWidgetData? {
