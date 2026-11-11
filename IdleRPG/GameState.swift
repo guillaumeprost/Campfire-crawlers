@@ -1,5 +1,6 @@
 import Foundation
 import Observation
+import WidgetKit
 
 // MARK: - Évènements envoyés à la scène
 
@@ -1862,7 +1863,9 @@ final class GameState {
     func replan() {
         guard !isForecast else { return }
         Outreach.portrait = heroLook.portrait
-        Outreach.apply(makePlan())
+        let plan = makePlan()
+        Outreach.apply(plan)
+        publishWidgets(upcoming: plan.notifications)
     }
 
     private func makePlan() -> OutreachPlan {
@@ -2276,5 +2279,135 @@ final class GameState {
         refreshUI()
         save()
         replan()
+    }
+}
+
+// MARK: - Widgets
+
+extension GameState {
+    /// Écrit d'avance l'état du héros pour les widgets, puis les fait redessiner.
+    fileprivate func publishWidgets(upcoming notes: [PlannedNotification]) {
+        let now = Date()
+        let symbols = ["hero.landing": "flag.checkered", "hero.rested": "bed.double.fill",
+                       "hero.hungry": "fork.knife", "hero.thirsty": "drop.fill",
+                       "hero.starving": "exclamationmark.triangle.fill", "hero.dying": "heart.slash.fill",
+                       "hero.fork": "signpost.right.and.left.fill", "hero.bored": "cloud.rain.fill"]
+        let upcoming = notes.filter { $0.date > now }
+            .sorted { $0.date < $1.date }
+            .map { HeroWidgetData.Upcoming(date: $0.date, title: $0.title, symbol: symbols[$0.id] ?? "bell.fill") }
+        var frames: [HeroWidgetData.Frame] = []
+        if heroClass != nil {
+            settleRest()
+            frames = GameState(twinOf: snapshot(), timeScale: timeScale).sampleAhead(from: now)
+        }
+        HeroWidgetData(frames: frames, upcoming: Array(upcoming.prefix(4))).save()
+        WidgetCenter.shared.reloadAllTimelines()
+    }
+
+    /// Joue la suite sur la copie et prend une image du héros à intervalles réguliers :
+    /// toutes les dix minutes sur une journée, toutes les trente secondes en mode test.
+    fileprivate func sampleAhead(from now: Date) -> [HeroWidgetData.Frame] {
+        let testing = timeScale > 1
+        let every: TimeInterval = testing ? 30 : 600
+        let count = testing ? 120 : 144
+        let lineage = generation
+        let fallen = (name: name, portrait: heroLook.portrait, level: level)
+        let start = clock
+        var frames: [HeroWidgetData.Frame] = []
+        for index in 0..<count {
+            let target = start + Double(index) * every * timeScale
+            var steps = 0
+            var lastEvent = clock
+            while generation == lineage, let time = nextEventTime, time <= target, steps < 500 {
+                steps += 1
+                lastEvent = time
+                pass(to: time)
+                handleEvent(live: false)
+            }
+            if generation != lineage {
+                // Le héros meurt avant la prochaine image : la dernière sera sa tombe.
+                let date = now.addingTimeInterval((lastEvent - start) / timeScale)
+                frames.append(HeroWidgetData.Frame(
+                    date: date, name: fallen.name, portrait: fallen.portrait, level: fallen.level, gold: gold,
+                    place: "Mort", title: lastFate, detail: "La mort est définitive.",
+                    sprite: "camp_fire_1", scene: "lw_camp", start: nil, end: nil,
+                    hp: 0, energy: 0, hunger: 0, thirst: 0, mood: 0, alert: "Mort", dead: true, pose: nil))
+                break
+            }
+            pass(to: target)
+            settleRest()
+            uiClock = clock
+            frames.append(widgetFrame(at: now.addingTimeInterval(Double(index) * every)))
+        }
+        return frames
+    }
+
+    private func widgetFrame(at date: Date) -> HeroWidgetData.Frame {
+        let info = activityInfo
+        var start: Date?, end: Date?
+        if let eta = info.eta, eta > 0 {
+            end = date.addingTimeInterval(eta)
+            if let progress = info.progress, progress < 0.999 {
+                start = date.addingTimeInterval(-eta * progress / (1 - progress))
+            }
+        }
+        let hour = Calendar.current.component(.hour, from: date)
+        let day = (7..<19).contains(hour)
+        func dungeonScene(_ index: Int) -> String {
+            switch Dungeon.all[index].style {
+            case .cave: "lw_cave"
+            case .forest: "lw_bois_hante"
+            case .crypt: "lw_crypte"
+            case .ice: "lw_glacier"
+            case .volcano: "lw_volcan"
+            }
+        }
+        let camp = day ? "lw_camp_brume" : "lw_camp"
+        let place: String, sprite: String, scene: String
+        var fork = false
+        var pose = "idle"
+        switch activity {
+        case .resting:
+            (place, sprite, scene) = ("Camp", "camp_fire_1", camp)
+            pose = "rest"
+        case .shopping: (place, sprite, scene) = ("Boutique", "shop_sign", "lw_marche")
+        case .tavern: (place, sprite, scene) = ("Taverne", "shop_sign", "lw_marche")
+        case .roaming:
+            (place, sprite, scene) = ("Balade", heroLook.portrait, "lw_trajet")
+            pose = "walk"
+        case .traveling(let trip):
+            if case .dungeon(let index) = trip.to {
+                (place, sprite, scene) = ("En route", Dungeon.all[index].boss.sprite, dungeonScene(index))
+            } else {
+                (place, sprite, scene) = ("En route", "camp_fire_1", "lw_trajet")
+            }
+            pose = trip.reason == .fled ? "flee" : "walk"
+        case .exploring(let run):
+            let dungeon = Dungeon.all[run.dungeon]
+            (place, sprite, scene) = (dungeon.name, dungeon.boss.sprite, dungeonScene(run.dungeon))
+            fork = run.fork != nil && run.forkChoice == nil
+            // Il marche jusqu'à la salle, puis se bat, ouvre le coffre ou se recueille.
+            let span = max(run.roomEnd - run.roomStart, 0.001)
+            let walking = (clock - run.roomStart) / span < Self.walkShare
+            switch run.room.kind {
+            case _ where walking: pose = "walk"
+            case .monster, .boss: pose = "attack"
+            case .chest, .trap, .fountain: pose = "idle"
+            }
+        }
+        let alert: String? = if isStarving { "Dépérit" }
+            else if thirst < 25 { "Assoiffé" }
+            else if hunger < 25 { "Affamé" }
+            else if fork { "Carrefour" }
+            else if mood < 25 { "Cafard" }
+            else if hp < maxHP * 0.3 { "Blessé" }
+            else { nil }
+        return HeroWidgetData.Frame(
+            date: date, name: name, portrait: heroLook.portrait, level: level, gold: gold,
+            place: place, title: info.title, detail: info.detail, sprite: sprite, scene: scene,
+            start: start, end: end,
+            hp: min(max(hp / maxHP, 0), 1), energy: min(max(energy / Self.maxEnergy, 0), 1),
+            hunger: min(max(hunger / 100, 0), 1), thirst: min(max(thirst / 100, 0), 1),
+            mood: min(max(mood / 100, 0), 1), alert: alert, dead: false, pose: pose)
     }
 }

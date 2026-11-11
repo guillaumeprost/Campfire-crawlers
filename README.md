@@ -20,6 +20,10 @@
   <img src="docs/captures/quetes.png" width="220" alt="Quêtes du jour">
 </p>
 
+<p align="center">
+  <img src="docs/captures/widget-veillee.png" width="180" alt="Le widget Veillée">
+</p>
+
 ## Le principe
 
 Le héros attend au feu de camp. On l'envoie dans un donjon, à la boutique, à la taverne ou en balade, et tout se déroule en **temps réel**, même application fermée. Une expédition dans le Volcan dure toute une journée : on revient voir où il en est, on le soigne, on prépare son sac, on choisit le prochain risque.
@@ -53,13 +57,14 @@ La mort est **définitive**. Une fuite qui rate, un héros oublié qui meurt de 
 - 14 succès récompensés, 3 quêtes du jour, bestiaire de 24 créatures.
 - Notifications prévues à l'avance : arrivée, carrefour, faim, soif, « va bientôt mourir ».
 - Activité en direct sur l'écran verrouillé et la Dynamic Island.
+- Widgets : « Le héros » en petit, moyen et grand sur l'écran d'accueil, et en trois formats sur l'écran verrouillé ; « Veillée », le héros dans son décor, pensé pour le mode StandBy. Le héros y est animé selon ce qu'il fait : il se repose au camp, marche, se bat ou fuit.
 - Interface Liquid Glass, en portrait comme en paysage.
 
 ## Technique
 
 - **SwiftUI** pour l'interface (Liquid Glass, iOS 26), **SpriteKit** pour les scènes.
 - **Simulation reproductible** : tout le hasard des règles passe par un générateur à graine (`SeededGenerator`). Le jeu peut donc rejouer l'avenir sur une copie de lui-même pour programmer les notifications et l'activité en direct au bon moment.
-- **ActivityKit** et **WidgetKit** pour l'activité en direct (extension `IdleRPGWidgets`).
+- **ActivityKit** et **WidgetKit** pour l'activité en direct et les widgets (extension `IdleRPGWidgets`). Les widgets ne pouvant pas être réveillés par le jeu, celui-ci rejoue la journée à venir et écrit d'avance une image du héros toutes les dix minutes dans un groupe d'apps partagé (`group.com.idlerpg.prototype`).
 - Sauvegarde locale dans `UserDefaults`, compatible avec les anciennes versions.
 
 ### Organisation
@@ -67,7 +72,7 @@ La mort est **définitive**. Une fuite qui rate, un héros oublié qui meurt de 
 | Dossier | Contenu |
 |---|---|
 | `IdleRPG/` | L'application : règles (`GameState.swift`, `World.swift`, `Item.swift`, `Exploits.swift`), scène (`WorldScene.swift`), interface (`ContentView.swift`, `MapPanel.swift`, `ExploitsPanel.swift`), notifications (`Outreach.swift`) |
-| `IdleRPGWidgets/` | L'activité en direct |
+| `IdleRPGWidgets/` | L'activité en direct et les widgets |
 | `Shared/` | Les données partagées entre l'app et l'extension |
 | `Art/` | Planches et scènes sources, scripts de découpe et d'export des sprites |
 | `Outils/equilibrage.py` | Le simulateur d'équilibrage |
@@ -75,7 +80,7 @@ La mort est **définitive**. Une fuite qui rate, un héros oublié qui meurt de 
 
 ## Lancer le projet
 
-Il faut **Xcode 27** et un simulateur ou un iPhone sous **iOS 26**.
+Il faut **Xcode 27** et un simulateur ou un iPhone sous **iOS 26**. Sur un vrai iPhone, choisir son équipe dans l'onglet Signing des deux cibles : Xcode crée alors le groupe d'apps des widgets.
 
 ```bash
 open IdleRPG.xcodeproj
@@ -114,3 +119,11 @@ Les héros, le marchand et les scènes peintes ont été générés puis découp
 - `Art/scenes/` contient les décors, en 16:9 pour le paysage et en 9:16 pour le portrait.
 
 `Art/ASSETS_ET_PROMPTS.md` recense toutes les images du jeu et les prompts utilisés.
+
+### Héros animés des widgets
+
+Un widget ne peut pas jouer d'animation, mais il sait faire avancer seul un chronomètre. `Outils/polices_widget.py` fabrique donc une police par classe et par animation, dont les chiffres 0 à 9 sont les images du sprite. Le widget écrit un chronomètre dans cette police et ne laisse voir que le chiffre des secondes : le héros change d'image chaque seconde. À relancer quand les sprites des héros changent :
+
+```bash
+python3 Outils/polices_widget.py
+```

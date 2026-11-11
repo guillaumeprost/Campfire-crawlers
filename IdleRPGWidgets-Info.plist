@@ -7,5 +7,23 @@
 		<key>NSExtensionPointIdentifier</key>
 		<string>com.apple.widgetkit-extension</string>
 	</dict>
+	<key>UIAppFonts</key>
+	<array>
+		<string>CCArcherAttack.ttf</string>
+		<string>CCArcherFlee.ttf</string>
+		<string>CCArcherIdle.ttf</string>
+		<string>CCArcherRest.ttf</string>
+		<string>CCArcherWalk.ttf</string>
+		<string>CCMageAttack.ttf</string>
+		<string>CCMageFlee.ttf</string>
+		<string>CCMageIdle.ttf</string>
+		<string>CCMageRest.ttf</string>
+		<string>CCMageWalk.ttf</string>
+		<string>CCWarriorAttack.ttf</string>
+		<string>CCWarriorFlee.ttf</string>
+		<string>CCWarriorIdle.ttf</string>
+		<string>CCWarriorRest.ttf</string>
+		<string>CCWarriorWalk.ttf</string>
+	</array>
 </dict>
 </plist>
