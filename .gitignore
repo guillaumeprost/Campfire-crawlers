@@ -1,0 +1,14 @@
+# macOS
+.DS_Store
+
+# Xcode
+xcuserdata/
+*.xcuserstate
+DerivedData/
+build/
+
+# Python
+__pycache__/
+
+# Aperçus et captures générés pendant le développement
+Art/apercus/
