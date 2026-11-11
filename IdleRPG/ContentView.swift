@@ -634,7 +634,7 @@ private struct HeroPicker: View {
         .confirmationDialog("Abandonner \(game.name) ?", isPresented: Binding(
             get: { abandonFor != nil }, set: { if !$0 { abandonFor = nil } }
         ), titleVisibility: .visible, presenting: abandonFor) { hero in
-            Button("Abandonner et partir avec le \(hero.name)", role: .destructive) {
+            Button("Abandonner et partir avec \(hero.theName)", role: .destructive) {
                 game.chooseHero(hero)
                 abandonFor = nil
                 close()

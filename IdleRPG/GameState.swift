@@ -254,7 +254,7 @@ final class GameState {
         }
         heroClass = choice
         hp = maxHP
-        log("person.fill", "Le \(choice.name) part à l'aventure.", .neutral)
+        log("person.fill", "\(choice.theName.prefix(1).uppercased() + choice.theName.dropFirst()) part à l'aventure.", .neutral)
         refreshUI()
         save()
         replan()

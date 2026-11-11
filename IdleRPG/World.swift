@@ -110,6 +110,9 @@ enum HeroClass: String, Codable, CaseIterable, Identifiable {
 
     var id: String { rawValue }
 
+    /// Avec l'article, élidé devant une voyelle : « le Guerrier », « l'Archer ».
+    var theName: String { self == .archer ? "l'\(name)" : "le \(name)" }
+
     var name: String {
         switch self {
         case .warrior: "Guerrier"
