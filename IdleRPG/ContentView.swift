@@ -685,9 +685,14 @@ struct PriceButton: View {
     let enabled: Bool
     var blocker: String?
     let action: () -> Void
+    /// Compte les appuis : chacun fait rebondir le bouton.
+    @State private var presses = 0
 
     var body: some View {
-        Button(action: action) {
+        Button {
+            presses += 1
+            action()
+        } label: {
             Group {
                 if let blocker {
                     Text(blocker)
@@ -706,7 +711,71 @@ struct PriceButton: View {
         }
         .actionGlass(enabled)
         .disabled(!enabled)
+        .keyframeAnimator(initialValue: 1.0, trigger: presses) { content, scale in
+            content.scaleEffect(scale)
+        } keyframes: { _ in
+            SpringKeyframe(0.82, duration: 0.08)
+            SpringKeyframe(1.08, duration: 0.16)
+            SpringKeyframe(1.0, duration: 0.2)
+        }
+        // Le prix payé s'envole du bouton.
+        .overlay {
+            HStack(spacing: 3) {
+                CoinIcon(size: 13)
+                Text("-\(price.short)")
+            }
+            .font(.subheadline.weight(.heavy))
+            .foregroundStyle(.yellow)
+            .shadow(color: .black.opacity(0.6), radius: 2)
+            .allowsHitTesting(false)
+            .keyframeAnimator(initialValue: PricePop(), trigger: presses) { content, pop in
+                content.opacity(pop.opacity).offset(y: pop.rise)
+            } keyframes: { _ in
+                KeyframeTrack(\.opacity) {
+                    LinearKeyframe(1, duration: 0.05)
+                    LinearKeyframe(1, duration: 0.45)
+                    LinearKeyframe(0, duration: 0.35)
+                }
+                KeyframeTrack(\.rise) {
+                    LinearKeyframe(-6, duration: 0.05)
+                    CubicKeyframe(-46, duration: 0.8)
+                }
+            }
+        }
     }
+}
+
+/// Étape du prix qui s'envole : invisible au repos.
+private struct PricePop {
+    var opacity = 0.0
+    var rise = 0.0
+}
+
+/// Petit bond d'une icône, à chaque changement de `trigger`.
+struct Hop: ViewModifier {
+    let trigger: Int
+
+    func body(content: Content) -> some View {
+        content.keyframeAnimator(initialValue: HopStep(), trigger: trigger) { view, step in
+            view.scaleEffect(step.scale).rotationEffect(.degrees(step.tilt))
+        } keyframes: { _ in
+            KeyframeTrack(\.scale) {
+                SpringKeyframe(1.35, duration: 0.15)
+                SpringKeyframe(1.0, duration: 0.35)
+            }
+            KeyframeTrack(\.tilt) {
+                LinearKeyframe(-12, duration: 0.08)
+                LinearKeyframe(12, duration: 0.1)
+                LinearKeyframe(-6, duration: 0.1)
+                SpringKeyframe(0, duration: 0.2)
+            }
+        }
+    }
+}
+
+private struct HopStep {
+    var scale = 1.0
+    var tilt = 0.0
 }
 
 extension View {

@@ -571,6 +571,8 @@ private struct CampUpgradeRow: View {
 /// L'étal du marchand : provisions et équipement du moment.
 private struct ShopPanel: View {
     let game: GameState
+    /// Achats par ligne : chaque achat fait sauter l'icône de la ligne.
+    @State private var hops: [String: Int] = [:]
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -579,6 +581,7 @@ private struct ShopPanel: View {
             ForEach(Supply.allCases) { supply in
                 HStack(spacing: 12) {
                     PixelImage(name: supply.sprite, size: 36)
+                        .modifier(Hop(trigger: hops[supply.rawValue, default: 0]))
                         .frame(width: 48, height: 48)
                         .background(Color.black.opacity(0.22), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
                     VStack(alignment: .leading, spacing: 2) {
@@ -593,7 +596,8 @@ private struct ShopPanel: View {
                     PriceButton(price: game.price(of: supply), enabled: game.canBuy(supply),
                                 blocker: game.purchaseBlocker(supply)) {
                         game.buy(supply)
-                        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                        hops[supply.rawValue, default: 0] += 1
+                        UINotificationFeedbackGenerator().notificationOccurred(.success)
                     }
                     .accessibilityLabel("Acheter \(supply.name) pour \(game.price(of: supply).short) or")
                 }
@@ -633,13 +637,16 @@ private struct ShopPanel: View {
                     }
                     Spacer(minLength: 4)
                     PriceButton(price: game.gearPrice(item), enabled: game.canBuyGear(item)) {
-                        game.buyGear(item)
-                        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                        withAnimation(.spring(duration: 0.4)) { game.buyGear(item) }
+                        UINotificationFeedbackGenerator().notificationOccurred(.success)
                     }
                     .accessibilityLabel("Acheter \(item.title(for: game.heroLook)) pour \(game.gearPrice(item).short) or")
                 }
                 .padding(10)
                 .glassEffect(.regular, in: .rect(cornerRadius: 22))
+                // L'objet acheté quitte l'étal en grossissant, comme s'il sautait dans le sac.
+                .transition(.asymmetric(insertion: .opacity,
+                                        removal: .scale(scale: 1.15).combined(with: .opacity)))
             }
         }
     }
@@ -856,6 +863,8 @@ private struct PantryCard: View {
 private struct TavernCard: View {
     let game: GameState
     let visit: TavernVisit
+    /// Commandes passées par ligne : chacune fait sauter l'icône.
+    @State private var hops: [String: Int] = [:]
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -887,6 +896,7 @@ private struct TavernCard: View {
             Image(systemName: order.symbol)
                 .font(.system(size: 16, weight: .semibold))
                 .foregroundStyle(.orange)
+                .modifier(Hop(trigger: hops[order.rawValue, default: 0]))
                 .frame(width: 24)
             VStack(alignment: .leading, spacing: 2) {
                 Text(order.name + (order == .ale ? " · \(visit.drinks)/\(TavernOrder.maxDrinks)" : ""))
@@ -896,16 +906,12 @@ private struct TavernCard: View {
                     .foregroundStyle(blocker == nil ? Color.secondary : Color.orange.opacity(0.85))
             }
             Spacer(minLength: 4)
-            Button {
+            PriceButton(price: game.price(of: order), enabled: blocker == nil) {
                 game.order(order)
-            } label: {
-                Label(game.price(of: order).short, systemImage: "dollarsign.circle.fill")
-                    .font(.caption.weight(.bold))
-                    .monospacedDigit()
+                hops[order.rawValue, default: 0] += 1
+                UINotificationFeedbackGenerator().notificationOccurred(.success)
             }
-            .buttonStyle(.glassProminent)
-            .tint(.orange)
-            .disabled(blocker != nil)
+            .accessibilityLabel("Commander \(order.name) pour \(game.price(of: order).short) or")
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 10)

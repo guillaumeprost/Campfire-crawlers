@@ -23,6 +23,10 @@ enum GameEvent {
     case found(Provision?, gold: Double)
     /// Taverne : une commande servie au héros.
     case treated(TavernOrder)
+    /// Achat payé au marchand, au forgeron ou pour le feu : image de l'achat, prix et légende.
+    case bought(sprite: String, price: Double, caption: String)
+    /// Vente au marchand.
+    case sold(gold: Double)
 }
 
 // MARK: - État du jeu
@@ -285,6 +289,7 @@ final class GameState {
         settleRest()
         gold -= price
         campLevel += 1
+        onEvent?(.bought(sprite: "camp_fire_1", price: price, caption: "Feu niveau \(campLevel)"))
         log("flame.fill", "Feu de camp amélioré, niveau \(campLevel) : le repos est plus rapide.", .good)
         refreshUI()
         save()
@@ -926,7 +931,9 @@ final class GameState {
     func order(_ order: TavernOrder) {
         guard orderBlocker(order) == nil, case .tavern(var visit) = activity else { return }
         settleRest()
-        gold -= price(of: order)
+        let cost = price(of: order)
+        gold -= cost
+        onEvent?(.bought(sprite: order.symbol, price: cost, caption: order.name))
         switch order {
         case .ale:
             visit.drinks += 1
@@ -1541,8 +1548,10 @@ final class GameState {
         guard canForge(slot), var item = equipped[slot] else { return }
         let ratio = hp / maxHP
         gold -= item.forgePrice
+        let price = item.forgePrice
         item.forge = item.forgeLevel + 1
         equipped[slot] = item
+        onEvent?(.bought(sprite: item.image(for: heroLook), price: price, caption: "Forgé +\(item.forgeLevel)"))
         if slot == .amulet { hp = max((maxHP * ratio).rounded(), 1) }
         log("hammer.fill", "Forgé : \(item.title(for: heroLook)), \(item.bonusText).", .good)
         save()
@@ -1573,15 +1582,18 @@ final class GameState {
         guard isShopping, let index = bag.firstIndex(where: { $0.id == item.id }) else { return }
         bag.remove(at: index)
         gold += item.sellValue
+        onEvent?(.sold(gold: item.sellValue))
         save()
     }
 
     var bagSellValue: Double { bag.reduce(0) { $0 + $1.sellValue } }
 
     func sellBag() {
-        guard isShopping else { return }
-        gold += bagSellValue
+        guard isShopping, !bag.isEmpty else { return }
+        let earned = bagSellValue
+        gold += earned
         bag.removeAll()
+        onEvent?(.sold(gold: earned))
         save()
     }
 
@@ -1623,7 +1635,9 @@ final class GameState {
 
     func buy(_ supply: Supply) {
         guard canBuy(supply) else { return }
-        gold -= price(of: supply)
+        let cost = price(of: supply)
+        gold -= cost
+        onEvent?(.bought(sprite: supply.sprite, price: cost, caption: supply.name))
         switch supply {
         case .potion: potions += 1
         case .ration: pantry[.ration, default: 0] += 1
@@ -1643,6 +1657,7 @@ final class GameState {
     func buyGear(_ item: Item) {
         guard canBuyGear(item), let index = shopStock.firstIndex(where: { $0.id == item.id }) else { return }
         gold -= gearPrice(item)
+        onEvent?(.bought(sprite: item.image(for: heroLook), price: gearPrice(item), caption: item.title(for: heroLook)))
         shopStock.remove(at: index)
         if equipped[item.slot] == nil {
             equipped[item.slot] = item

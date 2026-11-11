@@ -90,6 +90,10 @@ final class WorldScene: SKScene {
     private let props = SKNode()
     /// Effets qui survivent au changement de salle : monstre qui tombe, pièces, textes.
     private let effects = SKNode()
+    /// Le marchand, quand la scène du marché est affichée : les achats partent de lui.
+    private weak var merchant: SKSpriteNode?
+    /// La serveuse, quand la taverne est affichée : les commandes partent d'elle.
+    private weak var barmaid: SKSpriteNode?
     private var encounter: SKSpriteNode?
     private var encounterLift: CGFloat = 0
     private let encounterShadow = SKShapeNode()
@@ -644,6 +648,7 @@ final class WorldScene: SKScene {
         merchant.position = isPortrait ? scenePoint(0.62, 0.87) : scenePoint(0.6, 0.86)
         merchant.zPosition = 1.5
         props.addChild(merchant)
+        self.merchant = merchant
         let shadow = SKShapeNode(ellipseIn: CGRect(x: -20, y: -3, width: 40, height: 8))
         shadow.fillColor = UIColor(white: 0, alpha: 0.3)
         shadow.strokeColor = .clear
@@ -958,6 +963,10 @@ final class WorldScene: SKScene {
             react(order.symbol, color: order == .bard ? .systemGreen : .systemOrange)
             hero.run(.sequence([.moveBy(x: 0, y: 8, duration: 0.12), .moveBy(x: 0, y: -8, duration: 0.16)]))
             floatText(order == .stew ? "Miam" : "+ moral", color: .systemPink, size: 18, over: heroPosition, height: 96)
+        case let .bought(sprite, price, caption):
+            showPurchase(sprite: sprite, price: price, caption: caption)
+        case .sold(let gold):
+            showSale(gold)
         case .cared(let fed):
             react(fed ? "fork.knife" : "heart.fill", color: fed ? .systemOrange : .systemPink)
             hero.run(.sequence([.moveBy(x: 0, y: 8, duration: 0.12), .moveBy(x: 0, y: -8, duration: 0.16)]))
@@ -1130,6 +1139,133 @@ final class WorldScene: SKScene {
         if item.rarity.rawValue >= Rarity.epic.rawValue {
             successHaptic.notificationOccurred(.success)
         }
+    }
+
+    // MARK: - Achats
+
+    /// Image d'un achat : sprite du jeu, ou symbole système (gourde, commandes de la taverne) teinté.
+    private static func purchaseTexture(_ name: String) -> SKTexture {
+        if UIImage(named: name) != nil { return texture(name) }
+        let config = UIImage.SymbolConfiguration(pointSize: 40, weight: .bold)
+        let tint: UIColor = name == "drop.fill" ? .systemCyan : name == "music.note" ? .systemGreen : .systemOrange
+        let image = UIImage(systemName: name, withConfiguration: config)?
+            .withTintColor(tint, renderingMode: .alwaysOriginal) ?? UIImage()
+        return SKTexture(image: image)
+    }
+
+    /// Point de départ des échanges : le marchand s'il est là, sinon un peu au-dessus du feu.
+    private var counterPoint: CGPoint {
+        if let seller = merchant ?? barmaid {
+            return CGPoint(x: seller.position.x, y: seller.position.y + seller.size.height * 0.6)
+        }
+        return CGPoint(x: heroPosition.x + 70, y: heroPosition.y + 60)
+    }
+
+    /// Une pièce lancée en arc d'un point à un autre.
+    private func tossCoin(from start: CGPoint, to end: CGPoint, delay: TimeInterval) {
+        let coin = SKSpriteNode(texture: Self.texture("ui_coin"), size: CGSize(width: 16, height: 16))
+        coin.position = start
+        coin.zPosition = 9
+        coin.alpha = 0
+        effects.addChild(coin)
+        let path = CGMutablePath()
+        path.move(to: start)
+        path.addQuadCurve(to: end, control: CGPoint(x: (start.x + end.x) / 2, y: max(start.y, end.y) + 70))
+        let fly = SKAction.follow(path, asOffset: false, orientToPath: false, duration: 0.42)
+        fly.timingMode = .easeInEaseOut
+        coin.run(.sequence([.wait(forDuration: delay), .fadeIn(withDuration: 0.04),
+                            .group([fly, .rotate(byAngle: .pi * 4, duration: 0.42)]),
+                            .fadeOut(withDuration: 0.08), .removeFromParent()]))
+    }
+
+    /// Le héros paie : les pièces filent vers le marchand, l'achat s'affiche au milieu de l'écran,
+    /// au-dessus du panneau de la boutique qui cache souvent le bas de la scène, puis rejoint le héros.
+    private func showPurchase(sprite: String, price: Double, caption: String) {
+        let hand = CGPoint(x: heroPosition.x, y: heroPosition.y + hero.size.height * 0.55)
+        let coins = min(max(Int(price / 15), 3), 7)
+        for index in 0..<coins {
+            tossCoin(from: hand, to: counterPoint, delay: Double(index) * 0.06)
+        }
+        // Le marchand salue la vente.
+        if let merchant {
+            let wave = (1...4).map { Self.texture("merchant_wave_\($0)") }
+            merchant.run(.animate(with: wave, timePerFrame: 0.15), withKey: "thanks")
+        }
+
+        let holder = SKNode()
+        holder.position = counterPoint
+        holder.zPosition = 10
+        holder.setScale(0.2)
+        holder.alpha = 0
+        effects.addChild(holder)
+
+        let glow = SKShapeNode(circleOfRadius: 46)
+        glow.fillColor = UIColor(red: 1, green: 0.85, blue: 0.35, alpha: 0.28)
+        glow.strokeColor = .clear
+        glow.run(.repeatForever(.sequence([.scale(to: 1.15, duration: 0.3), .scale(to: 0.95, duration: 0.3)])))
+        holder.addChild(glow)
+        let rays = SKShapeNode(rectOf: CGSize(width: 110, height: 6), cornerRadius: 3)
+        rays.fillColor = UIColor(red: 1, green: 0.9, blue: 0.5, alpha: 0.35)
+        rays.strokeColor = .clear
+        let cross = rays.copy() as! SKShapeNode
+        cross.zRotation = .pi / 2
+        rays.addChild(cross)
+        rays.run(.repeatForever(.rotate(byAngle: .pi, duration: 1.6)))
+        holder.addChild(rays)
+
+        let plate = SKShapeNode(rectOf: CGSize(width: 64, height: 64), cornerRadius: 10)
+        plate.fillColor = UIColor(red: 0.10, green: 0.11, blue: 0.17, alpha: 0.9)
+        plate.strokeColor = UIColor(red: 1, green: 0.82, blue: 0.3, alpha: 1)
+        plate.lineWidth = 3
+        holder.addChild(plate)
+        let texture = Self.purchaseTexture(sprite)
+        let source = texture.size()
+        let fit = 46 / max(source.width, source.height, 1)
+        holder.addChild(SKSpriteNode(texture: texture, size: CGSize(width: source.width * fit, height: source.height * fit)))
+
+        let title = SKLabelNode()
+        title.attributedText = Self.outlined(caption, size: 16, color: .white)
+        title.position = CGPoint(x: 0, y: -58)
+        holder.addChild(title)
+        let cost = SKLabelNode()
+        cost.attributedText = Self.outlined("-\(price.short) or", size: 18, color: UIColor(red: 1, green: 0.78, blue: 0.25, alpha: 1))
+        cost.position = CGPoint(x: 0, y: 48)
+        holder.addChild(cost)
+
+        let center = CGPoint(x: playWidth * 0.5, y: size.height * 0.66)
+        let arrive = SKAction.group([.fadeIn(withDuration: 0.15), .move(to: center, duration: 0.32),
+                                     .sequence([.scale(to: 1.2, duration: 0.24), .scale(to: 1, duration: 0.1)])])
+        arrive.timingMode = .easeOut
+        let leave = SKAction.group([.move(to: hand, duration: 0.4), .scale(to: 0.3, duration: 0.4),
+                                    .sequence([.wait(forDuration: 0.25), .fadeOut(withDuration: 0.15)])])
+        leave.timingMode = .easeIn
+        holder.run(.sequence([
+            .wait(forDuration: 0.15), arrive, .wait(forDuration: 0.9), leave,
+            .run { [weak self] in self?.receivePurchase() },
+            .removeFromParent(),
+        ]))
+    }
+
+    /// L'achat arrive : le héros sautille dans une gerbe d'étincelles.
+    private func receivePurchase() {
+        hero.run(.sequence([.moveBy(x: 0, y: 12, duration: 0.12), .moveBy(x: 0, y: -12, duration: 0.18)]), withKey: "hop")
+        burst("fx_levelup", height: 70, at: CGPoint(x: heroPosition.x, y: heroPosition.y - 4))
+    }
+
+    /// Le héros vend : les pièces viennent du marchand jusqu'à lui.
+    private func showSale(_ gold: Double) {
+        let hand = CGPoint(x: heroPosition.x, y: heroPosition.y + hero.size.height * 0.55)
+        let coins = min(max(Int(gold / 15), 3), 8)
+        for index in 0..<coins {
+            tossCoin(from: counterPoint, to: hand, delay: Double(index) * 0.06)
+        }
+        run(.sequence([.wait(forDuration: Double(coins) * 0.06 + 0.4), .run { [weak self] in
+            guard let self else { return }
+            self.floatText("+\(gold.short) or", color: .systemYellow, size: 24,
+                           over: CGPoint(x: self.playWidth * 0.5, y: self.size.height * 0.66), height: 0)
+            self.hero.run(.sequence([.moveBy(x: 0, y: 8, duration: 0.1), .moveBy(x: 0, y: -8, duration: 0.14)]),
+                          withKey: "hop")
+        }]))
     }
 
     private func showBanner(_ text: String) {
