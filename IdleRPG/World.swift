@@ -65,9 +65,10 @@ struct Dungeon: Identifiable {
     /// Les monstres, l'or et l'expérience gagnent 35 % par rang.
     static func rankScale(_ rank: Int) -> Double { pow(1.35, Double(max(rank, 1) - 1)) }
 
-    /// Rythme réel : trajets et explorations durent 8 fois les valeurs de base (le Volcan, 16 h).
-    /// Réglé avec `Outils/equilibrage.py` pour qu'un joueur régulier finisse le jeu en deux mois environ.
-    static let pace: TimeInterval = 8
+    /// Rythme réel : trajets et explorations durent 8,5 fois les valeurs de base (le Volcan, 17 h).
+    /// Réglé avec `Outils/equilibrage.py` pour qu'un joueur régulier finisse le jeu en deux mois environ
+    /// (8,5 plutôt que 8 depuis que les salles de coffre sont plus courtes).
+    static let pace: TimeInterval = 8.5
 
     static let all: [Dungeon] = [
         Dungeon(id: 0, name: "Cave aux rats", style: .cave,

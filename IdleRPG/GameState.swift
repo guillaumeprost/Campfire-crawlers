@@ -442,6 +442,14 @@ final class GameState {
         dungeon.roomDuration / (1 + speedBonus)
     }
 
+    /// Un coffre s'ouvre vite : sa salle dure moins qu'un combat. Réglé avec Outils/equilibrage.py.
+    static let chestShare = 0.4
+
+    /// Durée d'une salle selon ce qu'elle contient. Un carrefour garde la durée pleine, pour laisser le temps de choisir.
+    func roomDuration(_ dungeon: Dungeon, for room: Room, fork: Bool = false) -> TimeInterval {
+        roomDuration(dungeon) * (room.kind == .chest && !fork ? Self.chestShare : 1)
+    }
+
     func explorationTime(_ dungeon: Dungeon) -> TimeInterval {
         dungeon.duration / (1 + speedBonus)
     }
@@ -1165,7 +1173,7 @@ final class GameState {
             let rank = min(max(trip.rank ?? 1, 1), dungeon.maxRank)
             let room = makeRoom(dungeon, index: 0, rank: rank, boosted: boosted)
             activity = .exploring(Run(dungeon: index, roomIndex: 0, roomStart: trip.end,
-                                      roomEnd: trip.end + roomDuration(dungeon), room: room,
+                                      roomEnd: trip.end + roomDuration(dungeon, for: room), room: room,
                                       gold: 0, items: 0, boosted: boosted, rank: rank, loot: []))
             log("door.left.hand.open",
                 "Entre dans \(dungeon.name), rang \(rank)\(boosted ? ", parchemin de force actif" : "").", .neutral)
@@ -1385,6 +1393,7 @@ final class GameState {
             }
             run.fork = offer
         }
+        run.roomEnd = run.roomStart + roomDuration(dungeon, for: run.room, fork: run.fork != nil)
         activity = .exploring(run)
     }
 

@@ -90,7 +90,7 @@ Choisir le schéma `IdleRPG`, puis lancer.
 
 ### Mode test
 
-Les vraies durées sont longues (16 h pour le Volcan). Dans le menu « … », le **mode test** accélère le temps ×240 : un donjon se joue en quelques secondes. Faim, soif et moral ralentissent d'autant pour rester jouables.
+Les vraies durées sont longues (17 h pour le Volcan). Dans le menu « … », le **mode test** accélère le temps ×240 : un donjon se joue en quelques secondes. Faim, soif et moral ralentissent d'autant pour rester jouables.
 
 En debug, quelques arguments de lancement aident aussi :
 
