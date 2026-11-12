@@ -33,7 +33,7 @@ struct ContentView: View {
     @State private var safeTrailing: CGFloat = 0
 
     /// Marge droite du panneau : l'île impose la zone sûre, un bord libre seulement l'arrondi de l'écran.
-    private func panelMargin(_ trailing: CGFloat) -> CGFloat { islandOnRight ? trailing + 12 : 14 }
+    private func panelMargin(_ trailing: CGFloat) -> CGFloat { islandOnRight ? trailing + 16 : 20 }
 
     /// L'île dynamique suit la caméra : à gauche quand l'interface est tournée vers la droite.
     private func readIsland() {
@@ -74,7 +74,7 @@ struct ContentView: View {
                         .frame(maxHeight: .infinity)
                         .clipShape(.rect(cornerRadius: 34))
                         .glassEffect(.regular, in: .rect(cornerRadius: 34))
-                        .padding(.vertical, 10)
+                        .padding(.vertical, 18)
                         .padding(.trailing, panelMargin(insets.trailing))
                         .frame(maxWidth: .infinity, alignment: .trailing)
                 }

@@ -319,6 +319,9 @@ final class WorldScene: SKScene {
 
     /// Ligne où les personnages posent les pieds : elle suit le sol de la scène peinte.
     private var feetY: CGFloat = 22
+    /// Part de la hauteur visible gardée comme sol sous les pieds, pour les scènes qui
+    /// défilent. Plus c'est petit, plus les personnages descendent vers le bord bas.
+    private static let scrollForeground: CGFloat = 0.09
     private var backdropSize = CGSize(width: 1, height: 1)
     private var backdropScale: CGFloat = 1
     /// Les personnages suivent la taille de la scène peinte : plus la vue est grande, plus ils grandissent.
@@ -391,15 +394,29 @@ final class WorldScene: SKScene {
         let visible = max(size.height - bottomInset, 1)
         sideSky.isHidden = true
         paintingCenterX = size.width / 2
+        // Bas du décor peint à l'écran : abaissé pour les scènes qui défilent (voir plus bas).
+        var groundY = bottomInset
         if scene.scrolls {
             sky.isHidden = true
             underSky.isHidden = true
-            backdropScale = visible / max(source.height, 1)
-            backdrop.configure(texture: texture, height: visible, sceneWidth: size.width, mirror: false)
-            backdrop.position = CGPoint(x: 0, y: bottomInset)
-            underStrip.configure(texture: texture, height: visible, sceneWidth: size.width,
+            // Le décor défilant remplit toute la hauteur : les pieds se posent alors à ~16 %
+            // du bas, laissant une large bande de sol vide sous les personnages. On agrandit
+            // un peu l'image et on fait déborder cet excédent de premier plan sous l'écran,
+            // pour que les pieds touchent presque le bord visible — le sol peint reste pile
+            // sous eux. `scrollForeground` = bande de sol gardée sous les pieds.
+            // Seulement en paysage : en portrait, `bottomInset` réserve déjà le bas pour le
+            // panneau replié, et le sol se cale juste au-dessus de lui.
+            let band = (1 - scene.floor) * visible
+            let extra = bottomInset <= 0 && scene.floor > 0
+                ? max(band - Self.scrollForeground * visible, 0) / scene.floor : 0
+            let drawn = visible + extra
+            groundY = bottomInset - extra
+            backdropScale = drawn / max(source.height, 1)
+            backdrop.configure(texture: texture, height: drawn, sceneWidth: size.width, mirror: false)
+            backdrop.position = CGPoint(x: 0, y: groundY)
+            underStrip.configure(texture: texture, height: drawn, sceneWidth: size.width,
                                  tint: UIColor(white: 0.55, alpha: 1), mirror: false)
-            underStrip.position = CGPoint(x: 0, y: bottomInset)
+            underStrip.position = CGPoint(x: 0, y: groundY)
         } else {
             backdrop.clear()
             underStrip.clear()
@@ -425,7 +442,7 @@ final class WorldScene: SKScene {
             underSky.position = sky.position
             underSky.isHidden = bottomInset <= 0
         }
-        feetY = (bottomInset + (1 - scene.floor) * source.height * backdropScale).rounded()
+        feetY = (groundY + (1 - scene.floor) * source.height * backdropScale).rounded()
     }
 
     /// Point de la scène peinte fixe, en fractions de l'image (u de gauche à droite, v de haut en bas).
