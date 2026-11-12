@@ -34,6 +34,15 @@ enum ItemSlot: String, Codable, CaseIterable, Identifiable {
     /// L'arme et l'amulette donnent des points, les autres un pourcentage.
     var isPercent: Bool { self != .weapon && self != .amulet }
 
+    /// Casque, armure et arme sont propres à une classe : un mage ne porte ni grosse
+    /// plaque ni arc. Bottes, amulette et anneau conviennent à tout le monde.
+    var isClassBound: Bool {
+        switch self {
+        case .weapon, .armor, .helmet: true
+        case .amulet, .ring, .boots: false
+        }
+    }
+
     var placeholderIcon: String {
         switch self {
         case .weapon: "wand.and.stars"
@@ -169,6 +178,10 @@ struct Item: Codable, Identifiable, Equatable {
     /// Absents des anciennes sauvegardes.
     var rank: Int?
     var forge: Int?
+    /// Classe à laquelle l'objet est réservé (arme, armure, casque) : un mage ne
+    /// peut pas porter une plaque de guerrier ni un arc. nil = utilisable par tous
+    /// (bottes, amulette, anneau) ou ancienne sauvegarde sans classe enregistrée.
+    var heroClass: HeroClass?
 
     static let maxForge = 10
     var forgeLevel: Int { forge ?? 0 }
@@ -185,6 +198,13 @@ struct Item: Codable, Identifiable, Equatable {
 
     /// Nombre de dessins par rareté (commun, rare, épique, légendaire), d'après
     /// Art/import_equipements.py. Chaque rareté a son élément : acier, glace, ombre, feu.
+    ///
+    /// L'arme est déjà déclinée par classe (`weapon_<classe>`). Pour faire de même avec
+    /// l'armure et le casque (plaque pour le guerrier, cuir pour l'archer, robe/chapeau
+    /// pour le mage), il suffit d'ajouter l'art `eq_armor_<classe>_<rareté>_<variante>` /
+    /// `eq_helmet_<classe>_…` puis les lignes `"armor_warrior": […]`, `"armor_archer"`,
+    /// `"armor_mage"` (idem casque) ici : `image(for:)` bascule tout seul dessus. Tant
+    /// que ces clés manquent, armure et casque gardent le dessin générique ci-dessous.
     private static let looks: [String: [Int]] = [
         "weapon_warrior": [3, 6, 6, 6],
         "weapon_archer": [4, 2, 4, 5],
@@ -196,10 +216,15 @@ struct Item: Codable, Identifiable, Equatable {
         "boots": [1, 1, 1, 1],
     ]
 
-    /// Image de l'objet. L'arme prend l'apparence de celle du héros : épée, arc ou bâton.
-    /// Le dessin est tiré de l'identifiant de l'objet : il ne change jamais.
+    /// Image de l'objet. Les emplacements liés à une classe (arme, armure, casque)
+    /// prennent l'apparence de celle du héros : épée/arc/bâton, plaque/cuir/robe…
+    /// Tant que l'art par classe n'existe pas (clé absente de `looks`), on retombe
+    /// sur le dessin générique de l'emplacement. Le dessin est tiré de l'identifiant
+    /// de l'objet : il ne change jamais.
     func image(for hero: HeroClass) -> String {
-        let family = slot == .weapon ? "weapon_\(hero.rawValue)" : slot.rawValue
+        let cls = heroClass ?? hero
+        let perClass = "\(slot.rawValue)_\(cls.rawValue)"
+        let family = slot.isClassBound && Self.looks[perClass] != nil ? perClass : slot.rawValue
         let count = Self.looks[family]?[rarity.rawValue] ?? 1
         let variant = Int(id.uuid.1) % count + 1
         return "eq_\(family)_\(rarity.rawValue)_\(variant)"
@@ -207,7 +232,7 @@ struct Item: Codable, Identifiable, Equatable {
 
     /// Nom affiché, lui aussi fonction de la classe pour l'arme.
     func title(for hero: HeroClass) -> String {
-        let base = slot == .weapon ? hero.weaponName : slot.name
+        let base = slot == .weapon ? (heroClass ?? hero).weaponName : slot.name
         return "\(base) \(rarity.suffix)\(forgeLevel > 0 ? " +\(forgeLevel)" : "")"
     }
 
@@ -219,7 +244,7 @@ struct Item: Codable, Identifiable, Equatable {
     static func rankScale(_ rank: Int) -> Double { pow(1.15, Double(max(rank, 1) - 1)) }
 
     static func random<G: RandomNumberGenerator>(tier: Int, rank: Int = 1, floor: Rarity = .common, luck: Double = 0,
-                                                 using rng: inout G) -> Item {
+                                                 hero: HeroClass, using rng: inout G) -> Item {
         let slot = ItemSlot.allCases.randomElement(using: &rng) ?? .weapon
         let rarity = Rarity.roll(floor: floor, luck: luck, using: &rng)
         let (sprite, baseName) = slot.bases.randomElement(using: &rng) ?? slot.bases[0]
@@ -237,7 +262,8 @@ struct Item: Codable, Identifiable, Equatable {
             tier: tier,
             sellValue: value.rounded(.up),
             rank: rank,
-            forge: 0
+            forge: 0,
+            heroClass: slot.isClassBound ? hero : nil
         )
     }
 }

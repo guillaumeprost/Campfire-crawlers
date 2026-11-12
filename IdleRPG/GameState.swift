@@ -1232,9 +1232,9 @@ final class GameState {
             }
             var item: Item?
             if boss {
-                item = Item.random(tier: dungeon.tier, rank: rank, floor: .rare, luck: luck, using: &rng)
+                item = Item.random(tier: dungeon.tier, rank: rank, floor: .rare, luck: luck, hero: heroLook, using: &rng)
             } else if Double.random(in: 0..<1, using: &rng) < 0.05 * (1 + luck) {
-                item = Item.random(tier: dungeon.tier, rank: rank, luck: luck, using: &rng)
+                item = Item.random(tier: dungeon.tier, rank: rank, luck: luck, hero: heroLook, using: &rng)
             }
             // Un monstre sur huit laisse tomber quelque chose à manger ou à boire.
             let snack = Double.random(in: 0..<1, using: &rng) < 0.12
@@ -1249,7 +1249,7 @@ final class GameState {
             let provision = Double.random(in: 0..<1, using: &rng) < 0.4 ? Provision.allCases.randomElement(using: &rng) : nil
             return Room(kind: .chest, sprite: "chest_closed", name: "Coffre", hpDelta: 0,
                         gold: (dungeon.gold * scale * 4 * spread * fortune).rounded(), xp: 0,
-                        item: lucky ? Item.random(tier: dungeon.tier, rank: rank, luck: luck, using: &rng) : nil,
+                        item: lucky ? Item.random(tier: dungeon.tier, rank: rank, luck: luck, hero: heroLook, using: &rng) : nil,
                         knockedOut: false, provision: provision)
         case .trap:
             let damage = (dungeon.monsterDamage * scale * 1.5 * spread * stone * armorFactor).rounded()
@@ -1601,9 +1601,16 @@ final class GameState {
         item.power > (equipped[item.slot]?.power ?? 0)
     }
 
+    /// Un objet réservé à une classe (arme, armure, casque) ne se porte que par elle ;
+    /// bottes et bijoux (classe nil) vont à tout le monde. Les objets sans classe des
+    /// anciennes sauvegardes restent équipables.
+    func canEquip(_ item: Item) -> Bool {
+        item.heroClass == nil || item.heroClass == heroClass
+    }
+
     /// Équipe un objet du sac. L'ancien objet retourne dans le sac.
     func equip(_ item: Item) {
-        guard let index = bag.firstIndex(where: { $0.id == item.id }) else { return }
+        guard canEquip(item), let index = bag.firstIndex(where: { $0.id == item.id }) else { return }
         let ratio = hp / maxHP
         bag.remove(at: index)
         if let previous = equipped[item.slot] { bag.insert(previous, at: index) }
@@ -1645,9 +1652,9 @@ final class GameState {
         let tier = shopTier
         let rank = max(bestRanks[tier - 1], 1)
         shopStock = [
-            Item.random(tier: tier, rank: rank, using: &rng),
-            Item.random(tier: tier, rank: rank, using: &rng),
-            Item.random(tier: tier, rank: rank, floor: .rare, using: &rng),
+            Item.random(tier: tier, rank: rank, hero: heroLook, using: &rng),
+            Item.random(tier: tier, rank: rank, hero: heroLook, using: &rng),
+            Item.random(tier: tier, rank: rank, floor: .rare, hero: heroLook, using: &rng),
         ]
     }
 
@@ -1689,7 +1696,7 @@ final class GameState {
     func gearPrice(_ item: Item) -> Double { item.sellValue * 4 }
 
     func canBuyGear(_ item: Item) -> Bool {
-        isShopping && gold >= gearPrice(item) && (equipped[item.slot] == nil || bag.count < Self.bagCapacity)
+        isShopping && canEquip(item) && gold >= gearPrice(item) && (equipped[item.slot] == nil || bag.count < Self.bagCapacity)
     }
 
     func buyGear(_ item: Item) {

@@ -6,6 +6,7 @@ xcuserdata/
 *.xcuserstate
 DerivedData/
 build/
+build-iso/
 
 # Python
 __pycache__/
