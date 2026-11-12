@@ -347,12 +347,14 @@ final class WorldScene: SKScene {
 
     private var isPortrait: Bool { size.height > size.width }
 
-    /// Scène du lieu, en version verticale quand l'écran est en portrait et qu'elle existe.
+    /// Scène du lieu. Seules les scènes **fixes** prennent une version verticale recadrée en portrait ;
+    /// les scènes qui **défilent** gardent l'image 16:9 en portrait comme en paysage, pour que le
+    /// scroll horizontal soit cohérent d'une orientation à l'autre.
     /// `portraitFloor` : la ligne du sol de l'image verticale.
     private func backdrop(_ image: String, floor: CGFloat, portraitFloor: CGFloat, scrolls: Bool) -> Backdrop {
         var name = image
         if image == "scene_camp_brume" { name = "scene_camp_jour" }
-        if isPortrait, UIImage(named: name + "_portrait") != nil {
+        if !scrolls, isPortrait, UIImage(named: name + "_portrait") != nil {
             return Backdrop(image: name + "_portrait", floor: portraitFloor, scrolls: scrolls)
         }
         return Backdrop(image: image, floor: floor, scrolls: scrolls)
