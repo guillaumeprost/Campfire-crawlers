@@ -1558,7 +1558,8 @@ final class GameState {
 
     private func addLoot(_ item: Item, live: Bool) {
         let outcome: LootOutcome
-        if equipped[item.slot] == nil {
+        // L'équipement d'une autre classe ne s'équipe pas d'office : il part au sac.
+        if canEquip(item), equipped[item.slot] == nil {
             equipped[item.slot] = item
             outcome = .equipped
             log("sparkles", "Équipé au retour : \(item.title(for: heroLook)) (\(item.bonusText)).", .good)
@@ -1596,9 +1597,9 @@ final class GameState {
         replan()
     }
 
-    /// Vrai si l'objet est meilleur que celui porté dans le même emplacement.
+    /// Vrai si l'objet est équipable et meilleur que celui porté dans le même emplacement.
     func isUpgrade(_ item: Item) -> Bool {
-        item.power > (equipped[item.slot]?.power ?? 0)
+        canEquip(item) && item.power > (equipped[item.slot]?.power ?? 0)
     }
 
     /// Un objet réservé à une classe (arme, armure, casque) ne se porte que par elle ;
@@ -1652,9 +1653,9 @@ final class GameState {
         let tier = shopTier
         let rank = max(bestRanks[tier - 1], 1)
         shopStock = [
-            Item.random(tier: tier, rank: rank, hero: heroLook, using: &rng),
-            Item.random(tier: tier, rank: rank, hero: heroLook, using: &rng),
-            Item.random(tier: tier, rank: rank, floor: .rare, hero: heroLook, using: &rng),
+            Item.random(tier: tier, rank: rank, hero: heroLook, ownClassOnly: true, using: &rng),
+            Item.random(tier: tier, rank: rank, hero: heroLook, ownClassOnly: true, using: &rng),
+            Item.random(tier: tier, rank: rank, floor: .rare, hero: heroLook, ownClassOnly: true, using: &rng),
         ]
     }
 

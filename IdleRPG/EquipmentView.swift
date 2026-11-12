@@ -198,6 +198,13 @@ private struct ItemDetailSheet: View {
                     .foregroundStyle(.secondary)
             }
             if !isEquipped {
+                let canEquip = game.canEquip(item)
+                if !canEquip, let other = item.heroClass {
+                    Label("Réservé \(other == .archer ? "à l'\(other.name)" : "au \(other.name)") — à revendre",
+                          systemImage: "lock.fill")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                }
                 HStack(spacing: 10) {
                     Button {
                         game.sell(item)
@@ -227,6 +234,7 @@ private struct ItemDetailSheet: View {
                     }
                     .buttonStyle(.glassProminent)
                     .tint(.green)
+                    .disabled(!canEquip)
                 }
             }
         }

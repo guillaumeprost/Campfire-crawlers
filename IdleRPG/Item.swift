@@ -243,8 +243,18 @@ struct Item: Codable, Identifiable, Equatable {
     /// pour monter en rang, il faut aussi des niveaux et la forge.
     static func rankScale(_ rank: Int) -> Double { pow(1.15, Double(max(rank, 1) - 1)) }
 
+    /// Classe de l'équipement trouvé. Le plus souvent celle du héros (≈70 %), parfois
+    /// (≈30 %) celle d'un autre personnage : le joueur peut ramasser l'arme/armure/casque
+    /// d'une autre classe (à revendre) et avoir envie d'essayer ce personnage.
+    static func lootClass<G: RandomNumberGenerator>(hero: HeroClass, using rng: inout G) -> HeroClass {
+        if Double.random(in: 0..<1, using: &rng) < 0.7 { return hero }
+        return HeroClass.allCases.filter { $0 != hero }.randomElement(using: &rng) ?? hero
+    }
+
+    /// `ownClassOnly` force la classe du héros (boutique : on n'y vend que de l'équipement
+    /// portable). Les donjons, eux, laissent tomber un peu d'équipement des autres classes.
     static func random<G: RandomNumberGenerator>(tier: Int, rank: Int = 1, floor: Rarity = .common, luck: Double = 0,
-                                                 hero: HeroClass, using rng: inout G) -> Item {
+                                                 hero: HeroClass, ownClassOnly: Bool = false, using rng: inout G) -> Item {
         let slot = ItemSlot.allCases.randomElement(using: &rng) ?? .weapon
         let rarity = Rarity.roll(floor: floor, luck: luck, using: &rng)
         let (sprite, baseName) = slot.bases.randomElement(using: &rng) ?? slot.bases[0]
@@ -263,7 +273,7 @@ struct Item: Codable, Identifiable, Equatable {
             sellValue: value.rounded(.up),
             rank: rank,
             forge: 0,
-            heroClass: slot.isClassBound ? hero : nil
+            heroClass: slot.isClassBound ? (ownClassOnly ? hero : lootClass(hero: hero, using: &rng)) : nil
         )
     }
 }
