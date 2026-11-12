@@ -499,37 +499,34 @@ private struct VitalsCard: View {
                 need("drop.fill", color: .cyan, label: "Hydratation", value: game.thirst)
                 need(moodSymbol, color: .pink, label: "Moral", value: game.mood)
             }
-            HStack(spacing: 10) {
-                // Avec l'armure, une stat de plus : on passe aux noms courts s'ils ne tiennent plus.
-                ViewThatFits(in: .horizontal) {
-                    statRow(short: false)
-                    statRow(short: true)
+            HStack(alignment: .top, spacing: 10) {
+                // Les stats reviennent à la ligne quand la largeur manque (panneau étroit en
+                // paysage, ou beaucoup de stats une fois équipé) au lieu de déborder du panneau.
+                StatFlow(spacing: 10, lineSpacing: 4) {
+                    stat("Attaque \(game.attack.short)")
+                    if game.speedBonus > 0 { stat("Vitesse +\(Int(game.speedBonus * 100))\u{00A0}%") }
+                    if game.luck > 0 { stat("Chance +\(Int(game.luck * 100))\u{00A0}%") }
+                    if game.defense > 0 { stat("Défense \(Int((game.defense * 100).rounded()))\u{00A0}%") }
+                    stat("Fuite \(Int((game.escapeChance() * 100).rounded()))\u{00A0}%")
                 }
-                Spacer(minLength: 0)
-                if game.scrollReady { PixelImage(name: "s_scroll", size: 16) }
-                if game.potions > 0 {
-                    HStack(spacing: 2) {
-                        PixelImage(name: "s_potion", size: 16)
-                        Text("×\(game.potions)")
+                .frame(maxWidth: .infinity, alignment: .leading)
+                if game.scrollReady || game.potions > 0 {
+                    HStack(spacing: 8) {
+                        if game.scrollReady { PixelImage(name: "s_scroll", size: 16) }
+                        if game.potions > 0 {
+                            HStack(spacing: 2) {
+                                PixelImage(name: "s_potion", size: 16)
+                                Text("×\(game.potions)")
+                            }
+                            .accessibilityElement(children: .ignore)
+                            .accessibilityLabel("\(game.potions) potions")
+                        }
                     }
-                    .accessibilityElement(children: .ignore)
-                    .accessibilityLabel("\(game.potions) potions")
                 }
             }
             .font(.caption.weight(.semibold))
             .foregroundStyle(.secondary)
         }
-    }
-
-    private func statRow(short: Bool) -> some View {
-        HStack(spacing: short ? 8 : 10) {
-            stat("\(short ? "Att." : "Attaque") \(game.attack.short)")
-            if game.speedBonus > 0 { stat("\(short ? "Vit." : "Vitesse") +\(Int(game.speedBonus * 100))\u{00A0}%") }
-            if game.luck > 0 { stat("\(short ? "Ch." : "Chance") +\(Int(game.luck * 100))\u{00A0}%") }
-            if game.defense > 0 { stat("\(short ? "Déf." : "Défense") \(Int((game.defense * 100).rounded()))\u{00A0}%") }
-            stat("Fuite \(Int((game.escapeChance() * 100).rounded()))\u{00A0}%")
-        }
-        .fixedSize()
     }
 
     private func stat(_ text: String) -> some View {
@@ -566,6 +563,44 @@ private struct VitalsCard: View {
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("\(label) : \(Int(value)) sur \(Int(limit))")
+    }
+}
+
+/// Dispose ses éléments de gauche à droite et les fait revenir à la ligne quand la largeur
+/// proposée est dépassée : les stats du héros tiennent ainsi dans le panneau, quelle que soit
+/// leur longueur ou l'orientation, sans jamais déborder.
+private struct StatFlow: Layout {
+    var spacing: CGFloat = 10
+    var lineSpacing: CGFloat = 4
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let maxWidth = proposal.width ?? .infinity
+        var x: CGFloat = 0, y: CGFloat = 0, lineHeight: CGFloat = 0, widest: CGFloat = 0
+        for view in subviews {
+            let size = view.sizeThatFits(.unspecified)
+            if x > 0, x + size.width > maxWidth {
+                widest = max(widest, x - spacing)
+                x = 0; y += lineHeight + lineSpacing; lineHeight = 0
+            }
+            x += size.width + spacing
+            lineHeight = max(lineHeight, size.height)
+        }
+        widest = max(widest, x - spacing)
+        return CGSize(width: min(widest, maxWidth), height: y + lineHeight)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        var x: CGFloat = 0, y: CGFloat = 0, lineHeight: CGFloat = 0
+        for view in subviews {
+            let size = view.sizeThatFits(.unspecified)
+            if x > 0, x + size.width > bounds.width {
+                x = 0; y += lineHeight + lineSpacing; lineHeight = 0
+            }
+            view.place(at: CGPoint(x: bounds.minX + x, y: bounds.minY + y),
+                       anchor: .topLeading, proposal: ProposedViewSize(size))
+            x += size.width + spacing
+            lineHeight = max(lineHeight, size.height)
+        }
     }
 }
 

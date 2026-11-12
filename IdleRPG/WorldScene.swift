@@ -549,7 +549,7 @@ final class WorldScene: SKScene {
                     node.colorBlendFactor = 0.5
                 }
             }
-            heroSlot = scenePoint(isPortrait ? 0.42 : 0.44, 0).x / playWidth
+            heroSlot = scenePoint(isPortrait ? 0.38 : 0.32, 0).x / playWidth
             // Debout au comptoir, chope en main : une bonne gorgée de temps en temps.
             let drink = heroFrames("tavern")
             hero.texture = drink[0]
@@ -716,7 +716,8 @@ final class WorldScene: SKScene {
         let barmaid = npc("npc_barmaid_idle_1")
         barmaid.xScale = -1   // dessinée tournée vers la droite : elle regarde le héros
         // Placés dans la partie visible, comme les monstres : le décor déborde de l'écran en portrait.
-        barmaid.position = CGPoint(x: playWidth * 0.64, y: feetY)
+        // Bien à droite du héros pour ne pas se chevaucher avec lui.
+        barmaid.position = CGPoint(x: playWidth * (isPortrait ? 0.68 : 0.70), y: feetY)
         barmaid.zPosition = 1.5
         barmaid.run(.repeatForever(.animate(with: Self.npcFrames("npc_barmaid_idle", 4), timePerFrame: 0.4)))
         props.addChild(barmaid)
