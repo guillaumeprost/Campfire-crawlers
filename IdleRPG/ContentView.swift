@@ -216,12 +216,13 @@ struct ContentView: View {
                     .padding(.leading, leading)
                     .padding(.top, top + 2)
             }
-            .overlay(alignment: .bottomLeading) {
+            .overlay(alignment: .bottomTrailing) {
                 if game.isExploring {
-                    // En combat, on peut prêter main-forte au héros.
+                    // En combat, on peut prêter main-forte au héros. Rangés contre le bord droit,
+                    // derrière le monstre : à gauche, ils passaient devant le héros.
                     CombatActions(game: game)
-                        .padding(.leading, leading + 14)
-                        .padding(.bottom, landscape ? 18 : Self.compactPanel + 44)
+                        .padding(.trailing, 14)
+                        .padding(.bottom, landscape ? 18 : Self.compactPanel + 60)
                 }
             }
     }
@@ -1027,7 +1028,7 @@ private struct CombatActions: View {
 
     var body: some View {
         GlassEffectContainer(spacing: 10) {
-            HStack(spacing: 10) {
+            VStack(spacing: 10) {
                 Button {
                     game.useSkill()
                 } label: {
