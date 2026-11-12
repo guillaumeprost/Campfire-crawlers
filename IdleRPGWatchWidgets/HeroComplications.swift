@@ -48,6 +48,89 @@ struct HeroComplication: Widget {
     }
 }
 
+/// Une seconde complication, rectangulaire, avec le personnage animé à côté de l'état.
+/// Sur les cadrans qui rendent la couleur, le héros s'affiche comme dans l'app ;
+/// sur ceux qui teintent, il devient une silhouette.
+struct HeroLiveComplication: Widget {
+    var body: some WidgetConfiguration {
+        StaticConfiguration(kind: "HeroLiveComplication", provider: HeroProvider()) { entry in
+            HeroLiveView(entry: entry)
+                .containerBackground(for: .widget) { AccessoryWidgetBackground() }
+        }
+        .configurationDisplayName("Le héros animé")
+        .description("Le personnage en mouvement, avec son état.")
+        .supportedFamilies([.accessoryRectangular])
+    }
+}
+
+struct HeroLiveView: View {
+    let entry: HeroEntry
+
+    var body: some View {
+        if let frame = entry.frame {
+            HStack(spacing: 6) {
+                AnimatedHero(frame: frame, height: 42)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(frame.name)
+                        .font(.headline)
+                        .widgetAccentable()
+                        .lineLimit(1)
+                    if frame.dead {
+                        Label("Mort", systemImage: "heart.slash.fill")
+                            .font(.caption2)
+                    } else {
+                        Text(frame.alert ?? frame.place)
+                            .font(.caption2)
+                            .lineLimit(1)
+                        if let end = frame.end, end > .now {
+                            Text(timerInterval: Date.now...end, countsDown: true)
+                                .font(.caption2.weight(.semibold))
+                                .monospacedDigit()
+                        } else {
+                            Label("\(Int((frame.hp * 100).rounded())) %", systemImage: "heart.fill")
+                                .font(.caption2)
+                        }
+                    }
+                }
+                Spacer(minLength: 0)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        } else {
+            EmptyComplication(family: .accessoryRectangular)
+        }
+    }
+}
+
+/// Le héros en mouvement. La complication ne joue pas d'animation en continu, mais un chronomètre
+/// avance seul : il est écrit dans une police dont chaque chiffre est une image de l'animation,
+/// et seul le dernier chiffre (les secondes) reste visible. Le héros change d'image chaque seconde.
+/// Sans pose (héros mort, anciennes données), une icône fixe.
+private struct AnimatedHero: View {
+    let frame: HeroWidgetData.Frame
+    /// Hauteur du héros. Les sprites font 124 × 80.
+    let height: CGFloat
+
+    private var width: CGFloat { (height * 124 / 80).rounded() }
+
+    var body: some View {
+        if let font = frame.animationFont {
+            Text(timerInterval: frame.date...frame.date.addingTimeInterval(3_599), countsDown: false)
+                .font(.custom(font, fixedSize: height))
+                .multilineTextAlignment(.trailing)
+                .lineLimit(1)
+                .frame(width: width * 5, height: height, alignment: .trailing)
+                .frame(width: width, height: height, alignment: .trailing)
+                .clipped()
+                .accessibilityHidden(true)
+        } else {
+            Image(systemName: frame.dead ? "heart.slash.fill" : "figure.stand")
+                .font(.title2)
+                .frame(width: width, height: height)
+                .accessibilityHidden(true)
+        }
+    }
+}
+
 struct HeroComplicationView: View {
     @Environment(\.widgetFamily) private var family
     let entry: HeroEntry

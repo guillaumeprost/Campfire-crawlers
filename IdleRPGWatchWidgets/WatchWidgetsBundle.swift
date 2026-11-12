@@ -5,5 +5,6 @@ import WidgetKit
 struct WatchWidgetsBundle: WidgetBundle {
     var body: some Widget {
         HeroComplication()
+        HeroLiveComplication()
     }
 }
