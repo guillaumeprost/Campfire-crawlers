@@ -2354,7 +2354,9 @@ extension GameState {
             settleRest()
             frames = GameState(twinOf: snapshot(), timeScale: timeScale).sampleAhead(from: now)
         }
-        HeroWidgetData(frames: frames, upcoming: Array(upcoming.prefix(4))).save()
+        let widgetData = HeroWidgetData(frames: frames, upcoming: Array(upcoming.prefix(4)))
+        widgetData.save()
+        WatchSync.shared.send(widgetData)
         WidgetCenter.shared.reloadAllTimelines()
     }
 

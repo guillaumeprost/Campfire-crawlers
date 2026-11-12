@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>WKApplication</key>
+	<true/>
+	<key>WKCompanionAppBundleIdentifier</key>
+	<string>com.idlerpg.prototype</string>
+	<key>UIAppFonts</key>
+	<array>
+		<string>CCArcherAttack.ttf</string>
+		<string>CCArcherFlee.ttf</string>
+		<string>CCArcherIdle.ttf</string>
+		<string>CCArcherRest.ttf</string>
+		<string>CCArcherWalk.ttf</string>
+		<string>CCMageAttack.ttf</string>
+		<string>CCMageFlee.ttf</string>
+		<string>CCMageIdle.ttf</string>
+		<string>CCMageRest.ttf</string>
+		<string>CCMageWalk.ttf</string>
+		<string>CCWarriorAttack.ttf</string>
+		<string>CCWarriorFlee.ttf</string>
+		<string>CCWarriorIdle.ttf</string>
+		<string>CCWarriorRest.ttf</string>
+		<string>CCWarriorWalk.ttf</string>
+	</array>
+</dict>
+</plist>

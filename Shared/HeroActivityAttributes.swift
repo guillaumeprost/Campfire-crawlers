@@ -1,3 +1,4 @@
+#if canImport(ActivityKit)
 import ActivityKit
 import Foundation
 
@@ -48,3 +49,4 @@ struct HeroActivityAttributes: ActivityAttributes {
         var hero: Hero?
     }
 }
+#endif
