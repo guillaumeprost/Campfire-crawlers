@@ -20,6 +20,13 @@
 			remoteGlobalIDString = 1D0000000000000000000013;
 			remoteInfo = IdleRPGWidgets;
 		};
+		2A000000000000000000000B /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 1D0000000000000000000009 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 1D0000000000000000000006;
+			remoteInfo = IdleRPG;
+		};
 		1D000000000000000000003C /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = 1D0000000000000000000009 /* Project object */;
@@ -77,6 +84,7 @@
 		1D0000000000000000000010 /* IdleRPGWidgets.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = IdleRPGWidgets.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		1D0000000000000000000020 /* IdleRPGWatch.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = IdleRPGWatch.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		1D0000000000000000000030 /* IdleRPGWatchWidgets.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = IdleRPGWatchWidgets.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		2A0000000000000000000002 /* IdleRPGTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = IdleRPGTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -103,6 +111,11 @@
 		1D0000000000000000000038 /* IdleRPGWatchWidgets */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = IdleRPGWatchWidgets;
+			sourceTree = "<group>";
+		};
+		2A0000000000000000000003 /* IdleRPGTests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = IdleRPGTests;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -136,6 +149,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		2A0000000000000000000005 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -147,6 +167,7 @@
 				1D0000000000000000000029 /* IdleRPGWatch */,
 				1D0000000000000000000038 /* IdleRPGWatchWidgets */,
 				1D0000000000000000000012 /* Shared */,
+				2A0000000000000000000003 /* IdleRPGTests */,
 				1D0000000000000000000005 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -158,6 +179,7 @@
 				1D0000000000000000000010 /* IdleRPGWidgets.appex */,
 				1D0000000000000000000020 /* IdleRPGWatch.app */,
 				1D0000000000000000000030 /* IdleRPGWatchWidgets.appex */,
+				2A0000000000000000000002 /* IdleRPGTests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -263,6 +285,29 @@
 			productReference = 1D0000000000000000000030 /* IdleRPGWatchWidgets.appex */;
 			productType = "com.apple.product-type.app-extension";
 		};
+		2A0000000000000000000001 /* IdleRPGTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 2A0000000000000000000007 /* Build configuration list for PBXNativeTarget "IdleRPGTests" */;
+			buildPhases = (
+				2A0000000000000000000004 /* Sources */,
+				2A0000000000000000000005 /* Frameworks */,
+				2A0000000000000000000006 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				2A000000000000000000000A /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				2A0000000000000000000003 /* IdleRPGTests */,
+			);
+			name = IdleRPGTests;
+			packageProductDependencies = (
+			);
+			productName = IdleRPGTests;
+			productReference = 2A0000000000000000000002 /* IdleRPGTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -305,6 +350,10 @@
 							};
 						};
 					};
+					2A0000000000000000000001 = {
+						CreatedOnToolsVersion = 16.0;
+						TestTargetID = 1D0000000000000000000006;
+					};
 				};
 			};
 			buildConfigurationList = 1D000000000000000000000D /* Build configuration list for PBXProject "IdleRPG" */;
@@ -325,6 +374,7 @@
 				1D0000000000000000000013 /* IdleRPGWidgets */,
 				1D0000000000000000000021 /* IdleRPGWatch */,
 				1D0000000000000000000031 /* IdleRPGWatchWidgets */,
+				2A0000000000000000000001 /* IdleRPGTests */,
 			);
 		};
 /* End PBXProject section */
@@ -352,6 +402,13 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 		1D0000000000000000000034 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		2A0000000000000000000006 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -389,6 +446,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		2A0000000000000000000004 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
@@ -406,6 +470,11 @@
 			isa = PBXTargetDependency;
 			target = 1D0000000000000000000021 /* IdleRPGWatch */;
 			targetProxy = 1D000000000000000000003E /* PBXContainerItemProxy */;
+		};
+		2A000000000000000000000A /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 1D0000000000000000000006 /* IdleRPG */;
+			targetProxy = 2A000000000000000000000B /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -669,6 +738,46 @@
 			};
 			name = Release;
 		};
+		2A0000000000000000000008 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 39GA99UABK;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				MARKETING_VERSION = 0.1;
+				PRODUCT_BUNDLE_IDENTIFIER = com.idlerpg.prototype.tests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/IdleRPG.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/IdleRPG";
+			};
+			name = Debug;
+		};
+		2A0000000000000000000009 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 39GA99UABK;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				MARKETING_VERSION = 0.1;
+				PRODUCT_BUNDLE_IDENTIFIER = com.idlerpg.prototype.tests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/IdleRPG.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/IdleRPG";
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -713,6 +822,15 @@
 			buildConfigurations = (
 				1D0000000000000000000036 /* Debug */,
 				1D0000000000000000000037 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		2A0000000000000000000007 /* Build configuration list for PBXNativeTarget "IdleRPGTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				2A0000000000000000000008 /* Debug */,
+				2A0000000000000000000009 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
