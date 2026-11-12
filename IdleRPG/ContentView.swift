@@ -56,6 +56,15 @@ struct ContentView: View {
                 ZStack(alignment: .topLeading) {
                     SpriteView(scene: scene, preferredFramesPerSecond: 60)
                         .frame(width: screen.width, height: screen.height)
+                    // En combat, les boutons de potion et de coup spécial au bord droit de la
+                    // zone visible (côté monstre), pour ne pas les poser sur le héros.
+                    if game.isExploring {
+                        CombatActions(game: game)
+                            .frame(width: open - insets.leading - 28, alignment: .trailing)
+                            .frame(maxHeight: .infinity, alignment: .bottom)
+                            .padding(.leading, insets.leading + 14)
+                            .padding(.bottom, insets.bottom + 16)
+                    }
                     header
                         .frame(width: open - insets.leading - 28)
                         .padding(.leading, insets.leading + 14)
@@ -1041,9 +1050,18 @@ private struct CombatActions: View {
                             .stroke(Color.yellow, style: StrokeStyle(lineWidth: 4, lineCap: .round))
                             .rotationEffect(.degrees(-90))
                             .padding(3)
-                        Image(systemName: "bolt.fill")
-                            .font(.title2.weight(.bold))
-                            .foregroundStyle(game.canUseSkill ? Color.yellow : Color.white.opacity(0.5))
+                        BurstShape()
+                            .fill(game.canUseSkill
+                                  ? LinearGradient(colors: [Color(red: 1, green: 0.87, blue: 0.24),
+                                                            Color(red: 1, green: 0.48, blue: 0.12),
+                                                            Color(red: 0.9, green: 0.18, blue: 0.09)],
+                                                   startPoint: .top, endPoint: .bottom)
+                                  : LinearGradient(colors: [Color.white.opacity(0.5), Color.white.opacity(0.5)],
+                                                   startPoint: .top, endPoint: .bottom))
+                            .overlay(BurstShape()
+                                .stroke(Color(red: 0.45, green: 0.08, blue: 0.04)
+                                    .opacity(game.canUseSkill ? 0.9 : 0), lineWidth: 1.5))
+                            .frame(width: 32, height: 32)
                     }
                     .frame(width: 58, height: 58)
                     .glassEffect(game.canUseSkill ? .regular.tint(.yellow.opacity(0.35)).interactive() : .regular,
@@ -1078,5 +1096,28 @@ private struct CombatActions: View {
                 .accessibilityLabel("Faire boire une potion, \(game.potions) restantes")
             }
         }
+    }
+}
+
+/// Étoile d'explosion façon bande dessinée (💥) : pointes longues et courtes en alternance,
+/// un peu irrégulières pour l'effet « boom ».
+private struct BurstShape: Shape {
+    // Rayons alternés pointe/creux, longueurs variables pour casser la symétrie.
+    private let spikes: [CGFloat] = [1.0, 0.44, 0.9, 0.5, 1.0, 0.4, 0.86, 0.48,
+                                     0.98, 0.46, 0.92, 0.5, 1.0, 0.42]
+
+    func path(in rect: CGRect) -> Path {
+        let center = CGPoint(x: rect.midX, y: rect.midY)
+        let radius = min(rect.width, rect.height) / 2
+        var path = Path()
+        let count = spikes.count
+        for i in 0..<count {
+            let angle = (CGFloat(i) / CGFloat(count)) * 2 * .pi - .pi / 2
+            let r = radius * spikes[i]
+            let point = CGPoint(x: center.x + cos(angle) * r, y: center.y + sin(angle) * r)
+            if i == 0 { path.move(to: point) } else { path.addLine(to: point) }
+        }
+        path.closeSubpath()
+        return path
     }
 }
