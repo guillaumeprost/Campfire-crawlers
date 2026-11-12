@@ -1,4 +1,12 @@
 {
-  "images" : [ { "filename" : "scene_bois_hante.jpg", "idiom" : "universal" } ],
-  "info" : { "author" : "xcode", "version" : 1 }
+  "images": [
+    {
+      "filename": "scene_bois_hante.png",
+      "idiom": "universal"
+    }
+  ],
+  "info": {
+    "author": "xcode",
+    "version": 1
+  }
 }

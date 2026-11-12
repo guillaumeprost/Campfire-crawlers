@@ -81,8 +81,8 @@ struct HeroWidgetData: Codable, Hashable {
     static let sample: HeroWidgetData = {
         let now = Date()
         let frame = Frame(date: now, name: "Elwyn", portrait: "hero_archer_portrait", level: 4, gold: 1_840,
-                          place: "Cave aux rats", title: "Cave aux rats · salle 3/8", detail: "Rang 2 · Combat : Chauve-souris",
-                          sprite: "monster_bat", scene: "lw_cave",
+                          place: "Cave aux rats", title: "Cave aux rats · salle 3/8", detail: "Rang 2 · Boss : Golem de pierre",
+                          sprite: "b_golem", scene: "lw_cave",
                           start: now.addingTimeInterval(-3_600), end: now.addingTimeInterval(5_400),
                           hp: 0.72, energy: 0.6, hunger: 0.55, thirst: 0.4, mood: 0.8, alert: nil, dead: false, pose: "attack")
         return HeroWidgetData(frames: [frame], upcoming: [

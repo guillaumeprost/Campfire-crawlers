@@ -24,26 +24,12 @@ struct MapPanel: View {
                 CareCard(game: game)
                 RoamRow(game: game)
                 CampUpgradeRow(game: game)
-                sectionTitle("Destinations")
-                PlaceRow(game: game, place: .shop, sprite: "shop_sign", title: "Boutique",
-                         subtitle: "Équipement, potions et vente du butin")
-                tavernRow
-                dungeons
 
             case .shopping:
                 ShopPanel(game: game)
-                sectionTitle("Repartir")
-                campRow
-                tavernRow
-                dungeons
 
             case .tavern(let visit):
                 TavernCard(game: game, visit: visit)
-                sectionTitle("Repartir")
-                campRow
-                PlaceRow(game: game, place: .shop, sprite: "shop_sign", title: "Boutique",
-                         subtitle: "Équipement, potions et vente du butin")
-                dungeons
 
             case .traveling(let trip):
                 TripCard(game: game, trip: trip)
@@ -58,26 +44,29 @@ struct MapPanel: View {
         }
     }
 
-    private var campRow: some View {
-        PlaceRow(game: game, place: .camp, sprite: "camp_fire_1", title: "Feu de camp",
-                 subtitle: "Les PV et l'énergie remontent avec le temps")
-    }
+}
 
-    private var tavernRow: some View {
-        PlaceRow(game: game, place: .tavern, sprite: "mug.fill", title: "Taverne",
-                 subtitle: "Une chope, un ragoût, le barde : son moral remonte")
-    }
+/// Le menu « Destinations » : où envoyer le héros — le feu de camp, la boutique,
+/// la taverne et les donjons. Toujours accessible ; chaque bouton se grise quand
+/// le héros est déjà sur place (« Ici ») ou en déplacement (« Occupé »).
+struct DestinationsPanel: View {
+    let game: GameState
 
-    private var dungeons: some View {
-        ForEach(Dungeon.all) { dungeon in
-            DungeonRow(game: game, dungeon: dungeon)
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            PlaceRow(game: game, place: .camp, sprite: "camp_fire_1", title: "Feu de camp",
+                     subtitle: "Les PV et l'énergie remontent avec le temps")
+            PlaceRow(game: game, place: .shop, sprite: "shop_sign", title: "Boutique",
+                     subtitle: "Équipement, potions et vente du butin")
+            PlaceRow(game: game, place: .tavern, sprite: "mug.fill", title: "Taverne",
+                     subtitle: "Une chope, un ragoût, le barde : son moral remonte")
+            Text("Donjons")
+                .font(.headline.weight(.heavy))
+                .padding(.top, 4)
+            ForEach(Dungeon.all) { dungeon in
+                DungeonRow(game: game, dungeon: dungeon)
+            }
         }
-    }
-
-    private func sectionTitle(_ text: String) -> some View {
-        Text(text)
-            .font(.headline.weight(.heavy))
-            .padding(.top, 4)
     }
 }
 

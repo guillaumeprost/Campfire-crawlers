@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Onglet Équipement : les quatre emplacements du héros, puis le sac.
+/// Onglet Équipement : les six emplacements du héros sur deux rangées, puis le sac.
 struct EquipmentPanel: View {
     let game: GameState
     @State private var selected: Item?
@@ -10,7 +10,7 @@ struct EquipmentPanel: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 8) {
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 3), spacing: 10) {
                 ForEach(ItemSlot.allCases) { slot in
                     SlotTile(slot: slot, item: game.equipped[slot], hero: game.heroLook) {
                         selected = game.equipped[slot]

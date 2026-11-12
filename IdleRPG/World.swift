@@ -159,15 +159,16 @@ enum HeroClass: String, Codable, CaseIterable, Identifiable {
         }
     }
 
-    /// Noms des images d'une animation : idle, walk, attack, hurt, flee ou rest.
+    /// Noms des images d'une animation : idle, walk, attack, special, hurt, flee, rest, sleep ou tavern.
+    /// Sprites pixel art animés avec PixelLab, installés par `Art/import_pixellab.py`.
+    /// `rest` : 4 images calmes puis 4 où il s'occupe (aiguise sa lame, taille des flèches, lit).
     func frames(_ animation: String) -> [String] {
         let count: Int
         switch animation {
         case "hurt": count = 1
-        case "flee": count = 3
-        case "attack": count = 5
-        // Assis au coin du feu : le guerrier a deux poses, les autres quatre.
-        case "rest": count = self == .warrior ? 2 : 4
+        case "attack": count = 6
+        case "special": count = 10
+        case "walk", "flee", "rest", "tavern": count = 8
         default: count = 4
         }
         return (1...count).map { "hero_\(rawValue)_\(animation)_\($0)" }

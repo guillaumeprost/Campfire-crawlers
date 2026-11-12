@@ -8,9 +8,13 @@ struct ContentView: View {
     @State private var tab: Section = .map
     @State private var pickingHero = false
     @State private var showOptions = false
+    @State private var showExploits = false
+    @State private var showStats = false
+    // La section d'exploits choisie vit ici, pour survivre aux rafraîchissements fréquents du jeu.
+    @State private var exploitPart: ExploitsPanel.Part = .quests
     @Namespace private var sectionSpace
 
-    private enum Section { case map, gear, exploits, journal }
+    private enum Section { case map, destinations, gear }
 
     init(game: GameState) {
         self.game = game
@@ -122,9 +126,8 @@ struct ContentView: View {
                 Group {
                     switch tab {
                     case .map: MapPanel(game: game)
+                    case .destinations: DestinationsPanel(game: game)
                     case .gear: EquipmentPanel(game: game)
-                    case .exploits: ExploitsPanel(game: game)
-                    case .journal: JournalPanel(game: game)
                     }
                 }
                 .padding(.horizontal, 16)
@@ -160,6 +163,8 @@ struct ContentView: View {
         }
         // Le héros part : on replie le panneau pour laisser voir la scène.
         .onChange(of: MapPanel.tab(for: game.activity).title) { _, place in
+            // En arrivant quelque part, on bascule sur l'onglet de ce lieu.
+            tab = .map
             if place == "Trajet" || place == "Balade" {
                 withAnimation(.snappy) { detent = .height(Self.compactPanel) }
             }
@@ -168,8 +173,14 @@ struct ContentView: View {
             if tab == .gear { game.markLootSeen() }
         }
         .confirmationDialog("Options", isPresented: $showOptions, titleVisibility: .hidden) {
-            Button(game.isTestSpeed ? "Désactiver le mode test" : "Mode test : temps ×\(Int(GameState.testTimeScale))") {
-                game.setTestSpeed(!game.isTestSpeed)
+            if game.isTestSpeed {
+                Button("Désactiver le mode test") { game.setTestSpeed(1) }
+            }
+            Button("Mode test lent (×\(Int(GameState.testTimeScaleSlow)))") {
+                game.setTestSpeed(GameState.testTimeScaleSlow)
+            }
+            Button("Mode test rapide (×\(Int(GameState.testTimeScale)))") {
+                game.setTestSpeed(GameState.testTimeScale)
             }
             Button("Recommencer la partie", role: .destructive) {
                 // La confirmation s'ouvre une fois ce menu refermé.
@@ -221,9 +232,8 @@ struct ContentView: View {
             HStack(spacing: 2) {
                 let place = MapPanel.tab(for: game.activity)
                 sectionButton(.map, title: place.title, icon: place.icon, badge: 0)
+                sectionButton(.destinations, title: "Destinations", icon: "map.fill", badge: 0)
                 sectionButton(.gear, title: "Équipement", icon: "backpack.fill", badge: game.unseenLoot)
-                sectionButton(.exploits, title: "Exploits", icon: "trophy.fill", badge: game.claimableCount)
-                sectionButton(.journal, title: "Journal", icon: "book.closed.fill", badge: 0)
             }
             .padding(5)
             .glassEffect(.regular.interactive(), in: .capsule)
@@ -311,11 +321,36 @@ struct ContentView: View {
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel("Or : \(game.gold.short)")
 
+                // Les exploits (quêtes, succès, bestiaire) s'ouvrent depuis le haut de l'écran.
+                Button {
+                    showExploits = true
+                } label: {
+                    Image(systemName: "trophy.fill")
+                        .font(.body.weight(.bold))
+                        .foregroundStyle(.white)
+                        .frame(width: 26, height: 26)
+                        .overlay(alignment: .topTrailing) {
+                            if game.claimableCount > 0 {
+                                Text("\(game.claimableCount)")
+                                    .font(.caption2.weight(.heavy))
+                                    .monospacedDigit()
+                                    .foregroundStyle(.white)
+                                    .padding(.horizontal, 5)
+                                    .padding(.vertical, 1)
+                                    .background(Color.red, in: Capsule())
+                                    .offset(x: 11, y: -8)
+                            }
+                        }
+                }
+                .buttonStyle(.glass)
+                .buttonBorderShape(.circle)
+                .accessibilityLabel(game.claimableCount > 0 ? "Exploits, \(game.claimableCount) à réclamer" : "Exploits")
+
                 Spacer()
 
-                // Toucher la pastille du héros ouvre le choix du héros.
+                // Toucher la pastille du héros (son niveau) ouvre sa fiche de caractéristiques.
                 Button {
-                    pickingHero = true
+                    showStats = true
                 } label: {
                     VStack(alignment: .trailing, spacing: 4) {
                         Text("\(game.name) · Niv. \(game.level)")
@@ -332,7 +367,14 @@ struct ContentView: View {
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("\(game.name), \(game.heroLook.name), niveau \(game.level), expérience \(Int(game.xp)) sur \(Int(game.xpNeeded))")
-                .accessibilityHint("Changer de héros")
+                .accessibilityHint("Voir la fiche du héros")
+                .sheet(isPresented: $showStats) {
+                    CharacterSheet(game: game) {
+                        showStats = false
+                        // On laisse la feuille se fermer avant d'ouvrir le choix du héros.
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { pickingHero = true }
+                    }
+                }
 
                 // Les options s'ouvrent depuis le panneau : en portrait, c'est lui qui est au premier plan.
                 Button {
@@ -347,6 +389,35 @@ struct ContentView: View {
                 .buttonBorderShape(.circle)
                 .accessibilityLabel("Options")
             }
+        }
+        .sheet(isPresented: $showExploits) {
+            NavigationStack {
+                ScrollView {
+                    ExploitsPanel(game: game, part: $exploitPart)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 8)
+                }
+                .scrollIndicators(.hidden)
+                .navigationTitle("Exploits")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button("Fermer") { showExploits = false }
+                    }
+                }
+                // Réclamer une récompense fête par-dessus la feuille.
+                .overlay {
+                    if let celebration = game.celebration {
+                        CelebrationView(celebration: celebration) {
+                            guard game.celebration?.id == celebration.id else { return }
+                            withAnimation(.easeOut(duration: 0.3)) { game.celebration = nil }
+                        }
+                        .id(celebration.id)
+                    }
+                }
+            }
+            .presentationDetents([.medium, .large])
+            .preferredColorScheme(.dark)
         }
     }
 }
@@ -419,10 +490,11 @@ private struct VitalsCard: View {
                 need(moodSymbol, color: .pink, label: "Moral", value: game.mood)
             }
             HStack(spacing: 10) {
-                stat("Attaque \(game.attack.short)")
-                if game.speedBonus > 0 { stat("Vitesse +\(Int(game.speedBonus * 100))\u{00A0}%") }
-                if game.luck > 0 { stat("Chance +\(Int(game.luck * 100))\u{00A0}%") }
-                stat("Fuite \(Int((game.escapeChance() * 100).rounded()))\u{00A0}%")
+                // Avec l'armure, une stat de plus : on passe aux noms courts s'ils ne tiennent plus.
+                ViewThatFits(in: .horizontal) {
+                    statRow(short: false)
+                    statRow(short: true)
+                }
                 Spacer(minLength: 0)
                 if game.scrollReady { PixelImage(name: "s_scroll", size: 16) }
                 if game.potions > 0 {
@@ -437,6 +509,17 @@ private struct VitalsCard: View {
             .font(.caption.weight(.semibold))
             .foregroundStyle(.secondary)
         }
+    }
+
+    private func statRow(short: Bool) -> some View {
+        HStack(spacing: short ? 8 : 10) {
+            stat("\(short ? "Att." : "Attaque") \(game.attack.short)")
+            if game.speedBonus > 0 { stat("\(short ? "Vit." : "Vitesse") +\(Int(game.speedBonus * 100))\u{00A0}%") }
+            if game.luck > 0 { stat("\(short ? "Ch." : "Chance") +\(Int(game.luck * 100))\u{00A0}%") }
+            if game.defense > 0 { stat("\(short ? "Déf." : "Défense") \(Int((game.defense * 100).rounded()))\u{00A0}%") }
+            stat("Fuite \(Int((game.escapeChance() * 100).rounded()))\u{00A0}%")
+        }
+        .fixedSize()
     }
 
     private func stat(_ text: String) -> some View {
@@ -570,6 +653,114 @@ private struct AwaySheet: View {
 }
 
 /// Choix du héros : au premier lancement, puis depuis le menu quand il est au camp.
+/// La fiche du héros : caractéristiques, équipement et traits. On l'ouvre en touchant son niveau.
+private struct CharacterSheet: View {
+    let game: GameState
+    let changeHero: () -> Void
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(spacing: 16) {
+                    HStack(spacing: 14) {
+                        PixelImage(name: game.heroLook.portrait, size: 72)
+                            .frame(width: 84, height: 84)
+                            .background(Color.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(game.name).font(.title3.weight(.heavy))
+                            Text("\(game.heroLook.name) · Niveau \(game.level)")
+                                .font(.subheadline).foregroundStyle(.secondary)
+                            ProgressView(value: min(game.xp / game.xpNeeded, 1)).tint(.cyan)
+                            Text("\(Int(game.xp)) / \(Int(game.xpNeeded)) XP")
+                                .font(.caption2.monospacedDigit()).foregroundStyle(.secondary)
+                        }
+                        Spacer(minLength: 0)
+                    }
+
+                    card("Caractéristiques") {
+                        statRow("Attaque", game.attack.short, "bolt.fill", .orange)
+                        statRow("PV max", game.maxHP.short, "heart.fill", .red)
+                        statRow("Énergie max", Int(GameState.maxEnergy).description, "bolt.heart.fill", .yellow)
+                        statRow("Vitesse", "+\(Int(game.speedBonus * 100))\u{00A0}%", "hare.fill", .green)
+                        statRow("Chance", "+\(Int(game.luck * 100))\u{00A0}%", "clover.fill", .mint)
+                        statRow("Fuite", "\(Int((game.escapeChance() * 100).rounded()))\u{00A0}%", "figure.run", .cyan)
+                    }
+
+                    card("Équipement") {
+                        ForEach(ItemSlot.allCases) { slot in
+                            HStack(spacing: 10) {
+                                Text(slot.name).font(.subheadline.weight(.semibold))
+                                Spacer(minLength: 4)
+                                if let item = game.equipped[slot] {
+                                    Text(item.title(for: game.heroLook))
+                                        .font(.caption).foregroundStyle(item.rarity.color).lineLimit(1)
+                                    Text(item.bonusText).font(.caption.weight(.bold)).monospacedDigit()
+                                } else {
+                                    Text("vide").font(.caption).foregroundStyle(.secondary)
+                                }
+                            }
+                        }
+                    }
+
+                    if !game.traits.isEmpty {
+                        card("Traits") {
+                            ForEach(game.traits) { trait in
+                                HStack(spacing: 10) {
+                                    Image(systemName: trait.symbol).foregroundStyle(.pink).frame(width: 22)
+                                    VStack(alignment: .leading, spacing: 1) {
+                                        Text(trait.name).font(.subheadline.weight(.semibold))
+                                        Text(trait.detail).font(.caption2).foregroundStyle(.secondary)
+                                    }
+                                    Spacer(minLength: 0)
+                                }
+                            }
+                        }
+                    }
+
+                    Button(action: changeHero) {
+                        Label("Changer de héros", systemImage: "person.2.fill")
+                            .font(.headline).frame(maxWidth: .infinity).padding(.vertical, 4)
+                    }
+                    .buttonStyle(.glass)
+                    .padding(.top, 4)
+                }
+                .padding(16)
+                .foregroundStyle(.white)
+            }
+            .scrollIndicators(.hidden)
+            .navigationTitle("Fiche du héros")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Fermer") { dismiss() }
+                }
+            }
+        }
+        .presentationDetents([.medium, .large])
+        .preferredColorScheme(.dark)
+    }
+
+    @ViewBuilder private func card<Content: View>(_ title: String, @ViewBuilder _ content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title).font(.caption.weight(.heavy)).foregroundStyle(.secondary)
+            content()
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .glassEffect(.regular, in: .rect(cornerRadius: 22))
+    }
+
+    private func statRow(_ label: String, _ value: String, _ icon: String, _ color: Color) -> some View {
+        HStack(spacing: 10) {
+            Image(systemName: icon).foregroundStyle(color).frame(width: 22)
+            Text(label).font(.subheadline)
+            Spacer(minLength: 4)
+            Text(value).font(.subheadline.weight(.bold)).monospacedDigit()
+        }
+    }
+}
+
 private struct HeroPicker: View {
     let game: GameState
     let close: () -> Void
@@ -577,15 +768,42 @@ private struct HeroPicker: View {
 
     var body: some View {
         VStack(spacing: 14) {
-            Text("Choisissez votre héros")
-                .font(.title2.weight(.heavy))
-                .padding(.top, 24)
-            Text(game.heroClass == nil
-                 ? "La mort est définitive. Prenez soin de lui."
-                 : "Choisir un autre héros abandonne \(game.name) à son sort. Il ne reviendra pas.")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
+            if game.heroClass == nil && game.generation > 1 {
+                // Le héros est mort : sa tombe, son épitaphe, et le choix du successeur.
+                VStack(spacing: 10) {
+                    ZStack {
+                        UnevenRoundedRectangle(topLeadingRadius: 42, bottomLeadingRadius: 6,
+                                               bottomTrailingRadius: 6, topTrailingRadius: 42)
+                            .fill(Color(white: 0.38))
+                            .overlay(
+                                UnevenRoundedRectangle(topLeadingRadius: 42, bottomLeadingRadius: 6,
+                                                       bottomTrailingRadius: 6, topTrailingRadius: 42)
+                                    .stroke(.white.opacity(0.15), lineWidth: 2))
+                            .frame(width: 118, height: 128)
+                        Text("R.I.P")
+                            .font(.system(size: 22, weight: .heavy, design: .serif))
+                            .foregroundStyle(.white.opacity(0.85))
+                            .offset(y: -14)
+                    }
+                    .padding(.top, 18)
+                    Text(game.lastFate)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                    Text("Choisissez un successeur")
+                        .font(.title2.weight(.heavy))
+                }
+            } else {
+                Text("Choisissez votre héros")
+                    .font(.title2.weight(.heavy))
+                    .padding(.top, 24)
+                Text(game.heroClass == nil
+                     ? "La mort est définitive. Prenez soin de lui."
+                     : "Choisir un autre héros abandonne \(game.name) à son sort. Il ne reviendra pas.")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+            }
 
             ForEach(HeroClass.allCases) { hero in
                 let current = game.heroClass == hero
@@ -837,16 +1055,22 @@ private struct CombatActions: View {
                 Button {
                     game.drinkPotion()
                 } label: {
-                    ZStack(alignment: .bottomTrailing) {
-                        PixelImage(name: "s_potion", size: 30)
-                            .frame(width: 50, height: 50)
-                            .opacity(game.canDrinkPotion ? 1 : 0.4)
-                        Text("\(game.potions)")
-                            .font(.caption2.weight(.heavy))
-                            .foregroundStyle(.white)
-                            .padding(4)
-                    }
-                    .glassEffect(game.canDrinkPotion ? .regular.interactive() : .regular, in: .circle)
+                    PixelImage(name: "s_potion", size: 30)
+                        .frame(width: 50, height: 50)
+                        .opacity(game.canDrinkPotion ? 1 : 0.4)
+                        .glassEffect(game.canDrinkPotion ? .regular.interactive() : .regular, in: .circle)
+                        // Le compte en pastille nette dans le coin, et non posé de travers sur la fiole.
+                        .overlay(alignment: .bottomTrailing) {
+                            Text("\(game.potions)")
+                                .font(.caption2.weight(.heavy))
+                                .monospacedDigit()
+                                .foregroundStyle(.white)
+                                .padding(.horizontal, 5)
+                                .padding(.vertical, 1)
+                                .background(Capsule().fill(Color(red: 0.1, green: 0.11, blue: 0.17)))
+                                .overlay(Capsule().stroke(.white.opacity(0.3), lineWidth: 1))
+                                .offset(x: 4, y: 2)
+                        }
                 }
                 .buttonStyle(.plain)
                 .disabled(!game.canDrinkPotion)

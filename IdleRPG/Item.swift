@@ -5,13 +5,15 @@ import UIKit
 
 /// Chaque emplacement renforce une seule caractéristique du héros.
 enum ItemSlot: String, Codable, CaseIterable, Identifiable {
-    case weapon, amulet, ring, boots
+    case weapon, helmet, armor, amulet, ring, boots
 
     var id: String { rawValue }
 
     var name: String {
         switch self {
         case .weapon: "Arme"
+        case .helmet: "Casque"
+        case .armor: "Armure"
         case .amulet: "Amulette"
         case .ring: "Anneau"
         case .boots: "Bottes"
@@ -21,18 +23,22 @@ enum ItemSlot: String, Codable, CaseIterable, Identifiable {
     var statLabel: String {
         switch self {
         case .weapon: "attaque"
+        case .helmet: "fuite"
+        case .armor: "défense"
         case .amulet: "PV max"
         case .ring: "chance"
         case .boots: "vitesse"
         }
     }
 
-    /// L'arme et l'amulette donnent des points, l'anneau et les bottes un pourcentage.
-    var isPercent: Bool { self == .ring || self == .boots }
+    /// L'arme et l'amulette donnent des points, les autres un pourcentage.
+    var isPercent: Bool { self != .weapon && self != .amulet }
 
     var placeholderIcon: String {
         switch self {
         case .weapon: "wand.and.stars"
+        case .helmet: "crown"
+        case .armor: "tshirt"
         case .amulet: "seal"
         case .ring: "circle.circle"
         case .boots: "shoe.fill"
@@ -43,6 +49,8 @@ enum ItemSlot: String, Codable, CaseIterable, Identifiable {
     var bases: [(String, String)] {
         switch self {
         case .weapon: [("item_wand", "Baguette"), ("item_orb", "Orbe"), ("item_grimoire", "Grimoire")]
+        case .helmet: [("eq_helmet_0_1", "Casque")]
+        case .armor: [("eq_armor_0_1", "Armure")]
         case .amulet: [("item_amulet", "Amulette"), ("item_talisman", "Talisman")]
         case .ring: [("item_ring", "Anneau"), ("item_gem", "Gemme")]
         case .boots: [("item_boots", "Bottes"), ("item_ankleboots", "Bottines")]
@@ -54,6 +62,10 @@ enum ItemSlot: String, Codable, CaseIterable, Identifiable {
         let table: [Double]
         switch self {
         case .weapon: table = [4, 10, 28, 80, 230]
+        // Armure : part des dégâts évitée. Casque : points de chance de fuite.
+        // Réglés avec Outils/equilibrage.py : plus forts, ils raccourcissaient le jeu de trois semaines.
+        case .armor: table = [2, 3, 4, 5, 6]
+        case .helmet: table = [2, 2, 3, 3, 4]
         case .amulet: table = [25, 60, 140, 320, 750]
         case .ring: table = [8, 12, 16, 20, 25]
         case .boots: table = [5, 8, 11, 14, 17]
@@ -65,6 +77,8 @@ enum ItemSlot: String, Codable, CaseIterable, Identifiable {
         switch self {
         case .boots: 60
         case .ring: 150
+        case .armor: 30
+        case .helmet: 15
         default: nil
         }
     }
@@ -169,15 +183,26 @@ struct Item: Codable, Identifiable, Equatable {
     /// Prix du prochain passage à la forge.
     var forgePrice: Double { (sellValue * 3 * pow(1.5, Double(forgeLevel))).rounded() }
 
+    /// Nombre de dessins par rareté (commun, rare, épique, légendaire), d'après
+    /// Art/import_equipements.py. Chaque rareté a son élément : acier, glace, ombre, feu.
+    private static let looks: [String: [Int]] = [
+        "weapon_warrior": [3, 6, 6, 6],
+        "weapon_archer": [4, 2, 4, 5],
+        "weapon_mage": [3, 4, 5, 6],
+        "armor": [2, 5, 2, 2],
+        "helmet": [2, 2, 4, 2],
+        "amulet": [2, 2, 2, 2],
+        "ring": [1, 1, 1, 2],
+        "boots": [1, 1, 1, 1],
+    ]
+
     /// Image de l'objet. L'arme prend l'apparence de celle du héros : épée, arc ou bâton.
+    /// Le dessin est tiré de l'identifiant de l'objet : il ne change jamais.
     func image(for hero: HeroClass) -> String {
-        let variant = id.uuid.0 % 2 == 0 ? "a" : "b"
-        switch slot {
-        case .weapon: return "w_\(hero.rawValue)_\(rarity.rawValue)"
-        case .amulet: return "amulet_\(rarity.rawValue)_\(variant)"
-        case .ring: return "ring_\(rarity.rawValue)_\(variant)"
-        case .boots: return "boots_\(rarity.rawValue)"
-        }
+        let family = slot == .weapon ? "weapon_\(hero.rawValue)" : slot.rawValue
+        let count = Self.looks[family]?[rarity.rawValue] ?? 1
+        let variant = Int(id.uuid.1) % count + 1
+        return "eq_\(family)_\(rarity.rawValue)_\(variant)"
     }
 
     /// Nom affiché, lui aussi fonction de la classe pour l'arme.

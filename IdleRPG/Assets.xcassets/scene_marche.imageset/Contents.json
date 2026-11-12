@@ -1,4 +1,12 @@
 {
-  "images" : [ { "filename" : "scene_marche.jpg", "idiom" : "universal" } ],
-  "info" : { "author" : "xcode", "version" : 1 }
+  "images": [
+    {
+      "filename": "scene_marche.png",
+      "idiom": "universal"
+    }
+  ],
+  "info": {
+    "author": "xcode",
+    "version": 1
+  }
 }

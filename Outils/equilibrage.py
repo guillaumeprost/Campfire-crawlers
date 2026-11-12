@@ -39,8 +39,8 @@ DUNGEONS = [
     dict(travel=600, duration=7200, rooms=36, hp=1800, dmg=55, gold=420, xp=320),
 ]
 CLASSES = {'warrior': (1.3, 1, 0, 0), 'archer': (1, 1, 0.25, 0.25), 'mage': (0.9, 1.25, 0, 0)}
-BASE = {'weapon': [4, 10, 28, 80, 230], 'amulet': [25, 60, 140, 320, 750], 'ring': [8, 12, 16, 20, 25], 'boots': [5, 8, 11, 14, 17]}
-CAP = {'boots': 60, 'ring': 150}
+BASE = {'weapon': [4, 10, 28, 80, 230], 'helmet': [2, 2, 3, 3, 4], 'armor': [2, 3, 4, 5, 6], 'amulet': [25, 60, 140, 320, 750], 'ring': [8, 12, 16, 20, 25], 'boots': [5, 8, 11, 14, 17]}
+CAP = {'boots': 60, 'ring': 150, 'armor': 30, 'helmet': 15}
 RARITY = [(1, 4), (1.5, 10), (2.2, 25), (3.5, 70)]
 
 def scale(rank): return P['rank_factor'] ** (rank - 1)
@@ -153,7 +153,7 @@ class Game:
                 x = r.random(); kind = 'monster' if x < 0.55 else 'chest' if x < 0.75 else 'trap' if x < 0.85 else 'fountain'
                 if forced: kind, forced = forced, None
             atk_now = atk * (P['sharp'] if 'sharp' in blessings else 1)
-            taken = P['stone'] if 'stone' in blessings else 1
+            taken = (P['stone'] if 'stone' in blessings else 1) * (1 - s.g('armor') / 100)
             gmul = P['fortune'] if 'fortune' in blessings else 1
             spread = r.uniform(0.8, 1.2)
             wounded = min(hp, max(round(maxhp * 0.05), 1)); ko = False; ko_boss = kind == 'boss'
@@ -288,7 +288,7 @@ class Game:
         for need in (s.hunger, s.thirst):
             c -= P['escape_empty'] if need <= 0 else P['escape_needy'] if need < 25 else 0
         if s.injured: c -= P['escape_injured']
-        c += s.g('boots') / P['boots_div'] + s.g('ring') / P['ring_div']
+        c += s.g('boots') / P['boots_div'] + s.g('ring') / P['ring_div'] + s.g('helmet') / 100
         return min(max(c, 0.05), 0.97)
     def die(s):
         s.deaths += 1; s.st['deaths'] += 1

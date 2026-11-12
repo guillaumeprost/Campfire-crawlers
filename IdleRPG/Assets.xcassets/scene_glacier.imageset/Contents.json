@@ -1,4 +1,12 @@
 {
-  "images" : [ { "filename" : "scene_glacier.jpg", "idiom" : "universal" } ],
-  "info" : { "author" : "xcode", "version" : 1 }
+  "images": [
+    {
+      "filename": "scene_glacier.png",
+      "idiom": "universal"
+    }
+  ],
+  "info": {
+    "author": "xcode",
+    "version": 1
+  }
 }

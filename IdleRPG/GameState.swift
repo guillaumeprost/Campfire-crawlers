@@ -43,8 +43,11 @@ final class GameState {
     static let fleeThreshold = 0.25
     /// Part d'une salle passée à marcher avant la rencontre.
     static let walkShare = 0.3
-    /// Mode test : tout va 240 fois plus vite, un donjon se joue en quelques secondes ou minutes.
+    /// Mode test rapide : tout va 240 fois plus vite, un donjon se joue en quelques secondes.
     static let testTimeScale = 240.0
+    /// Mode test lent : assez accéléré pour essayer sans attendre, mais assez lent pour
+    /// observer les combats, les sprites et les animations (un donjon de 12 min ≈ 36 s).
+    static let testTimeScaleSlow = 20.0
 
     // Héros
     private(set) var gold: Double = 0
@@ -76,6 +79,9 @@ final class GameState {
     private(set) var heroName: String?
     /// Jauge du coup spécial, de 0 à 1 : elle se remplit en gagnant des combats.
     private(set) var skillCharge: Double = 0
+    #if DEBUG
+    @ObservationIgnored private var debugAutoSkill = false
+    #endif
     /// Mode Hardcore : un héros vaincu meurt pour de bon et laisse un héritage.
     /// Numéro du héros de la lignée, en mode Hardcore.
     private(set) var generation = 1
@@ -147,7 +153,8 @@ final class GameState {
         #if DEBUG
         if defaults.bool(forKey: "debugReset") { defaults.removeObject(forKey: Self.saveKey) }
         #endif
-        timeScale = defaults.bool(forKey: Self.timeScaleKey) ? Self.testTimeScale : 1
+        let storedScale = defaults.double(forKey: Self.timeScaleKey)
+        timeScale = storedScale > 1 ? storedScale : 1
         let hadSave = load()
         #if DEBUG
         let scale = defaults.double(forKey: "debugTimeScale")
@@ -162,6 +169,8 @@ final class GameState {
         uiClock = clock
         #if DEBUG
         if defaults.bool(forKey: "debugHeal") { hp = maxHP; energy = Self.maxEnergy; injured = false }
+        // Tests : `-debugSkill YES` recharge le coup spécial et le déclenche à chaque combat.
+        debugAutoSkill = defaults.bool(forKey: "debugSkill")
         // Tests : `-debugGo 0` envoie le héros dans la Cave au lancement, `-debugGo shop` à la boutique.
         if let hero = defaults.string(forKey: "debugHero").flatMap(HeroClass.init(rawValue:)), hero != heroClass {
             // Tests : change de héros où qu'il soit, en gardant la même part de PV.
@@ -249,6 +258,10 @@ final class GameState {
     /// Fraction : 0.2 pour +20 %.
     var speedBonus: Double { gear(.boots) / 100 + heroLook.speedBonus }
     var luck: Double { gear(.ring) / 100 + heroLook.luckBonus }
+    /// Part des dégâts évitée grâce à l'armure (0,2 pour 20 %).
+    var defense: Double { gear(.armor) / 100 }
+    /// Ce qui reste des dégâts une fois l'armure passée.
+    private var armorFactor: Double { 1 - defense }
 
     /// Changer de héros, c'est abandonner l'actuel à son sort : il ne reviendra pas.
     var isAbandoning: Bool { heroClass != nil }
@@ -480,7 +493,7 @@ final class GameState {
 
     private func odds(of dungeon: Dungeon, rank: Int) -> (success: Double, death: Double) {
         let key = "\(dungeon.id).\(rank).\(level).\(Int(hp)).\(Int(energy)).\(potions).\(scrollReady).\(attack).\(maxHP)"
-            + ".\(Int(hunger / 25)).\(Int(thirst / 25)).\(injured).\(Int(escapeChance() * 100))"
+            + ".\(Int(hunger / 25)).\(Int(thirst / 25)).\(injured).\(Int(escapeChance() * 100)).\(Int(defense * 100))"
         if let known = chanceCache[key] { return known }
         var generator = SeededGenerator(state: UInt64(dungeon.id * 7_919 + rank * 104_729))
         let trials = 60
@@ -529,7 +542,7 @@ final class GameState {
                 let boss = kind == .boss
                 let damage = Self.fightDamage(foeHP: dungeon.monsterHP * scale * (boss ? 3 : 1),
                                               foeDamage: dungeon.monsterDamage * scale * (boss ? 1.5 : 1),
-                                              attack: power, spread: spread)
+                                              attack: power, spread: spread) * armorFactor
                 if damage >= hp {
                     guard potions > 0, damage < hp + heal else { return .fled(energy: energy, knockedOut: true, boss: boss) }
                     potions -= 1
@@ -545,7 +558,7 @@ final class GameState {
                     power = attack(at: level) * (scrollReady ? 1.25 : 1)
                 }
             case .trap:
-                let damage = (dungeon.monsterDamage * scale * 1.5 * spread).rounded()
+                let damage = (dungeon.monsterDamage * scale * 1.5 * spread * armorFactor).rounded()
                 if damage >= hp { return .fled(energy: energy, knockedOut: true, boss: false) }
                 hp = max(hp - damage, 1)
             case .fountain:
@@ -647,6 +660,12 @@ final class GameState {
             refreshQuests(now: now)
             settleRest()
             uiClock = clock
+            #if DEBUG
+            if debugAutoSkill && !isForecast {
+                skillCharge = 1
+                if canUseSkill { useSkill() }
+            }
+            #endif
         }
         if now.timeIntervalSince(lastSave) >= 10 { save() }
     }
@@ -1204,7 +1223,8 @@ final class GameState {
             let foe = boss ? dungeon.boss : (dungeon.monsters.randomElement(using: &rng) ?? dungeon.monsters[0])
             let damage = (Self.fightDamage(foeHP: dungeon.monsterHP * scale * (boss ? 3 : 1),
                                            foeDamage: dungeon.monsterDamage * scale * (boss ? 1.5 : 1),
-                                           attack: attack * (boosted ? 1.25 : 1) * sharp, spread: spread) * stone).rounded()
+                                           attack: attack * (boosted ? 1.25 : 1) * sharp, spread: spread)
+                          * stone * armorFactor).rounded()
             let needsPotion = damage >= hp
             if needsPotion, potions == 0 || damage >= hp + potionHeal {
                 return Room(kind: kind, sprite: foe.sprite, name: foe.name, hpDelta: -(hp - woundedHP),
@@ -1232,7 +1252,7 @@ final class GameState {
                         item: lucky ? Item.random(tier: dungeon.tier, rank: rank, luck: luck, using: &rng) : nil,
                         knockedOut: false, provision: provision)
         case .trap:
-            let damage = (dungeon.monsterDamage * scale * 1.5 * spread * stone).rounded()
+            let damage = (dungeon.monsterDamage * scale * 1.5 * spread * stone * armorFactor).rounded()
             let fatal = damage >= hp
             return Room(kind: .trap, sprite: "trap_spikes", name: "Piège",
                         hpDelta: fatal ? -(hp - woundedHP) : -damage,
@@ -1443,7 +1463,7 @@ final class GameState {
     static let escapeFatigue = 0.25
 
     /// Chance de s'en sortir quand le héros fuit. Elle baisse s'il est à terre, face au boss,
-    /// fatigué, affamé, assoiffé ou déjà blessé, et monte avec de bonnes bottes et la chance.
+    /// fatigué, affamé, assoiffé ou déjà blessé, et monte avec le casque, de bonnes bottes et la chance.
     func escapeChance(knockedOut: Bool = false, boss: Bool = false, energy: Double? = nil) -> Double {
         var chance = Self.escapeBase
         if knockedOut { chance -= Self.escapeKnockout }
@@ -1453,7 +1473,7 @@ final class GameState {
         chance -= thirst <= 0 ? 0.25 : thirst < 25 ? 0.15 : 0
         if injured { chance -= 0.10 }
         if traits.contains(.careful) { chance += 0.05 }
-        chance += gear(.boots) / 400 + gear(.ring) / 800
+        chance += gear(.boots) / 400 + gear(.ring) / 800 + gear(.helmet) / 100
         return min(max(chance, 0.05), 0.97)
     }
 
@@ -1511,6 +1531,9 @@ final class GameState {
         activity = .resting
         log("skull.fill", "\(fallen) \(fate). Son successeur hérite du camp et de \(legacy.short) or.", .bad)
         if live { onEvent?(.died(fate.hasPrefix("a été abandonné") ? "Abandonné…" : "Mort…")) }
+        // On ne repart pas tout seul : la tombe bloque le jeu jusqu'au choix d'un successeur.
+        // (L'abandon volontaire, lui, réassigne aussitôt la classe depuis chooseHero.)
+        heroClass = nil
     }
 
     /// Le héros sort du donjon avec sa sacoche : le butin rejoint l'équipement ou le sac.
@@ -2117,10 +2140,11 @@ final class GameState {
     var isTestSpeed: Bool { timeScale > 1 }
 
     /// Accélère tout le jeu pour essayer les longs donjons sans attendre.
-    func setTestSpeed(_ enabled: Bool) {
+    /// `scale` ≤ 1 désactive le mode test ; sinon c'est le facteur d'accélération.
+    func setTestSpeed(_ scale: Double) {
         settleRest()
-        timeScale = enabled ? Self.testTimeScale : 1
-        UserDefaults.standard.set(enabled, forKey: Self.timeScaleKey)
+        timeScale = scale > 1 ? scale : 1
+        UserDefaults.standard.set(timeScale, forKey: Self.timeScaleKey)
         refreshUI()
         replan()
     }
@@ -2342,6 +2366,8 @@ extension GameState {
         let count = testing ? 120 : 144
         let lineage = generation
         let fallen = (name: name, portrait: heroLook.portrait, level: level)
+        // Besoins figés sur l'état réel courant : le widget ne projette pas une fausse famine.
+        let frozenNeeds = (hunger: hunger, thirst: thirst, mood: mood)
         let start = clock
         var frames: [HeroWidgetData.Frame] = []
         for index in 0..<count {
@@ -2367,12 +2393,15 @@ extension GameState {
             pass(to: target)
             settleRest()
             uiClock = clock
-            frames.append(widgetFrame(at: now.addingTimeInterval(Double(index) * every)))
+            frames.append(widgetFrame(at: now.addingTimeInterval(Double(index) * every), needs: frozenNeeds))
         }
         return frames
     }
 
-    private func widgetFrame(at date: Date) -> HeroWidgetData.Frame {
+    /// `needs` fige la faim/soif/moral sur l'état réel courant : le widget projette le lieu et
+    /// l'activité, mais ne crie pas « Dépérit » pour une famine simplement prévue loin dans le futur
+    /// (les vraies échéances de besoins restent dans la liste « À venir »).
+    private func widgetFrame(at date: Date, needs: (hunger: Double, thirst: Double, mood: Double)) -> HeroWidgetData.Frame {
         let info = activityInfo
         var start: Date?, end: Date?
         if let eta = info.eta, eta > 0 {
@@ -2425,11 +2454,12 @@ extension GameState {
             case .chest, .trap, .fountain: pose = "idle"
             }
         }
-        let alert: String? = if isStarving { "Dépérit" }
-            else if thirst < 25 { "Assoiffé" }
-            else if hunger < 25 { "Affamé" }
+        let starving = heroClass != nil && (needs.hunger <= 0 || needs.thirst <= 0)
+        let alert: String? = if starving { "Dépérit" }
+            else if needs.thirst < 25 { "Assoiffé" }
+            else if needs.hunger < 25 { "Affamé" }
             else if fork { "Carrefour" }
-            else if mood < 25 { "Cafard" }
+            else if needs.mood < 25 { "Cafard" }
             else if hp < maxHP * 0.3 { "Blessé" }
             else { nil }
         return HeroWidgetData.Frame(
@@ -2437,7 +2467,7 @@ extension GameState {
             place: place, title: info.title, detail: info.detail, sprite: sprite, scene: scene,
             start: start, end: end,
             hp: min(max(hp / maxHP, 0), 1), energy: min(max(energy / Self.maxEnergy, 0), 1),
-            hunger: min(max(hunger / 100, 0), 1), thirst: min(max(thirst / 100, 0), 1),
-            mood: min(max(mood / 100, 0), 1), alert: alert, dead: false, pose: pose)
+            hunger: min(max(needs.hunger / 100, 0), 1), thirst: min(max(needs.thirst / 100, 0), 1),
+            mood: min(max(needs.mood / 100, 0), 1), alert: alert, dead: false, pose: pose)
     }
 }
