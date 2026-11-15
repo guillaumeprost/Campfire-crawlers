@@ -199,17 +199,20 @@ struct Item: Codable, Identifiable, Equatable {
     /// Nombre de dessins par rareté (commun, rare, épique, légendaire), d'après
     /// Art/import_equipements.py. Chaque rareté a son élément : acier, glace, ombre, feu.
     ///
-    /// L'arme est déjà déclinée par classe (`weapon_<classe>`). Pour faire de même avec
-    /// l'armure et le casque (plaque pour le guerrier, cuir pour l'archer, robe/chapeau
-    /// pour le mage), il suffit d'ajouter l'art `eq_armor_<classe>_<rareté>_<variante>` /
-    /// `eq_helmet_<classe>_…` puis les lignes `"armor_warrior": […]`, `"armor_archer"`,
-    /// `"armor_mage"` (idem casque) ici : `image(for:)` bascule tout seul dessus. Tant
-    /// que ces clés manquent, armure et casque gardent le dessin générique ci-dessous.
+    /// L'arme et l'armure sont déclinées par classe (`weapon_<classe>`, `armor_<classe>` :
+    /// plaque pour le guerrier, cuir pour l'archer, robe pour le mage) ; `image(for:)`
+    /// bascule dessus tout seul. Le casque reste générique faute d'art par classe dans la
+    /// planche ; pour le décliner, ajouter l'art `eq_helmet_<classe>_<rareté>_<variante>`
+    /// puis les lignes `"helmet_warrior"`, `"helmet_archer"`, `"helmet_mage"` ici.
     private static let looks: [String: [Int]] = [
         "weapon_warrior": [3, 6, 6, 6],
         "weapon_archer": [4, 2, 4, 5],
         "weapon_mage": [3, 4, 5, 6],
         "armor": [2, 5, 2, 2],
+        // Armures par classe : plaque (guerrier), cuir (archer), robe (mage).
+        "armor_warrior": [2, 2, 1, 2],
+        "armor_archer": [2, 2, 1, 2],
+        "armor_mage": [2, 3, 1, 2],
         "helmet": [2, 2, 4, 2],
         "amulet": [2, 2, 2, 2],
         "ring": [1, 1, 1, 2],

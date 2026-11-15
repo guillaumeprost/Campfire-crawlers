@@ -59,6 +59,27 @@ GEAR = {
         [[169], [170]],
         [[72], ([73], {'hue': -170, 'warm': True})],
     ],
+    # Armures par classe : plaque (guerrier), cuir à ceinture / capuche (archer), robe (mage).
+    # Les corps existent dans les planches glace (rare) et ombre (épique) ; le commun est
+    # désaturé en acier/tissu (grey) et le légendaire teinté feu (warm), comme ailleurs.
+    'armor_warrior': [
+        [([73], {'grey': True}), ([74], {'grey': True})],
+        [[73], [74]],
+        [[169]],
+        [[72], ([73], {'hue': -170, 'warm': True})],
+    ],
+    'armor_archer': [
+        [([88], {'grey': True}), ([95], {'grey': True})],
+        [[88], [95]],
+        [[159]],
+        [([88], {'hue': -170, 'warm': True}), ([95], {'warm': True})],
+    ],
+    'armor_mage': [
+        [([78], {'grey': True}), ([93], {'grey': True})],
+        [[75], [78], [93]],
+        [[170]],
+        [([78], {'hue': -170, 'warm': True}), ([93], {'warm': True})],
+    ],
     'helmet': [
         [([160], {'grey': True}), ([63], {'grey': True})],
         [([63], KEY), ([162], KEY)],
