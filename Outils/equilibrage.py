@@ -38,7 +38,7 @@ DUNGEONS = [
     dict(travel=360, duration=3600, rooms=24, hp=600, dmg=28, gold=140, xp=120),
     dict(travel=600, duration=7200, rooms=36, hp=1800, dmg=55, gold=420, xp=320),
 ]
-CLASSES = {'warrior': (1.3, 1, 0, 0), 'archer': (1, 1, 0.25, 0.25), 'mage': (0.9, 1.25, 0, 0)}
+CLASSES = {'warrior': (1.3, 1, 0, 0), 'archer': (1.1, 1, 0.25, 0.25), 'mage': (0.95, 1.25, 0, 0)}
 BASE = {'weapon': [4, 10, 28, 80, 230], 'helmet': [2, 2, 3, 3, 4], 'armor': [2, 3, 4, 5, 6], 'amulet': [25, 60, 140, 320, 750], 'ring': [8, 12, 16, 20, 25], 'boots': [5, 8, 11, 14, 17]}
 CAP = {'boots': 60, 'ring': 150, 'armor': 30, 'helmet': 15}
 RARITY = [(1, 4), (1.5, 10), (2.2, 25), (3.5, 70)]

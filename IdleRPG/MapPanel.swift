@@ -23,6 +23,9 @@ struct MapPanel: View {
             case .resting:
                 CareCard(game: game)
                 RoamRow(game: game)
+                if !game.ownedCompanions.isEmpty {
+                    CompanionRow(game: game)
+                }
                 CampUpgradeRow(game: game)
 
             case .shopping:
@@ -554,6 +557,76 @@ private struct CampUpgradeRow: View {
         }
         .padding(10)
         .glassEffect(.regular, in: .rect(cornerRadius: 22))
+    }
+}
+
+/// Au camp : choisir le compagnon qui accompagne le héros (un seul à la fois).
+/// On ne peut en changer qu'ici, au feu de camp.
+private struct CompanionRow: View {
+    let game: GameState
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 8) {
+                Image(systemName: "pawprint.fill")
+                    .foregroundStyle(.yellow)
+                Text("Compagnon")
+                    .font(.subheadline.weight(.bold))
+                Spacer(minLength: 4)
+                if game.activeCompanion != nil {
+                    Button {
+                        game.setCompanion(nil)
+                        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                    } label: {
+                        Text("Renvoyer")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.secondary)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Renvoyer le compagnon")
+                }
+            }
+            ForEach(game.ownedCompanions) { companion in
+                card(for: companion)
+            }
+        }
+        .padding(10)
+        .glassEffect(.regular, in: .rect(cornerRadius: 22))
+    }
+
+    private func card(for companion: CompanionKind) -> some View {
+        let active = game.activeCompanion == companion
+        return Button {
+            game.setCompanion(active ? nil : companion)
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        } label: {
+            HStack(spacing: 12) {
+                PixelImage(name: companion.portrait, size: 44)
+                    .frame(width: 56, height: 56)
+                    .background(Color.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(companion.name)
+                        .font(.subheadline.weight(.bold))
+                    ForEach(companion.perks, id: \.self) { perk in
+                        Text(perk)
+                            .font(.caption2.weight(.bold))
+                            .foregroundStyle(.green)
+                    }
+                }
+                Spacer(minLength: 4)
+                if active {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.title3)
+                        .foregroundStyle(.green)
+                        .accessibilityLabel("Compagnon actif")
+                }
+            }
+            .padding(8)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .glassEffect(active ? .regular.tint(.green.opacity(0.3)) : .regular,
+                         in: .rect(cornerRadius: 16))
+        }
+        .buttonStyle(.plain)
     }
 }
 

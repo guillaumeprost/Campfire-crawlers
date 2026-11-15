@@ -47,11 +47,11 @@ final class GameStateTests: XCTestCase {
 
         let archer = makeGame()
         archer.chooseHero(.archer)
-        XCTAssertEqual(archer.maxHP, 100, "L'Archer a des PV de base.")
+        XCTAssertEqual(archer.maxHP, 110, "L'Archer a un léger +10 % de PV.")
 
         let mage = makeGame()
         mage.chooseHero(.mage)
-        XCTAssertEqual(mage.maxHP, 90, "Le Mage a -10 % de PV.")
+        XCTAssertEqual(mage.maxHP, 95, "Le Mage a -5 % de PV.")
     }
 
     func testMageHitsHarderThanWarrior() {

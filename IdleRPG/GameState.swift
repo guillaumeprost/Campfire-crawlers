@@ -21,6 +21,8 @@ enum GameEvent {
     case died(String)
     /// Itinérance : une trouvaille en chemin.
     case found(Provision?, gold: Double)
+    /// Itinérance : un compagnon rencontré et apprivoisé en chemin.
+    case companionFound(CompanionKind)
     /// Taverne : une commande servie au héros.
     case treated(TavernOrder)
     /// Achat payé au marchand, au forgeron ou pour le feu : image de l'achat, prix et légende.
@@ -112,6 +114,10 @@ final class GameState {
     private(set) var unseenLoot = 0
     /// Nil tant que le joueur n'a pas choisi son héros.
     private(set) var heroClass: HeroClass?
+    /// Compagnon qui accompagne le héros, s'il en a un d'actif.
+    private(set) var activeCompanion: CompanionKind?
+    /// Compagnons déjà rencontrés et apprivoisés (stockés par `rawValue`).
+    private(set) var unlockedCompanions: Set<String> = []
 
     // Monde
     private(set) var activity: Activity = .resting
@@ -207,11 +213,22 @@ final class GameState {
     var maxHP: Double { maxHP(at: level) }
     var attack: Double { attack(at: level) }
     private func maxHP(at level: Int) -> Double {
-        ((100 + 20 * Double(level - 1) + gear(.amulet)) * heroLook.hpFactor).rounded()
+        ((100 + 20 * Double(level - 1) + gear(.amulet)) * heroLook.hpFactor * companionHPFactor).rounded()
     }
     private func attack(at level: Int) -> Double {
-        ((10 + 3 * Double(level - 1) + gear(.weapon)) * heroLook.attackFactor * condition).rounded()
+        ((10 + 3 * Double(level - 1) + gear(.weapon)) * heroLook.attackFactor * condition * companionAttackFactor).rounded()
     }
+
+    // MARK: Bonus du compagnon
+    /// Le loup frappe plus fort, et plus encore une fois dans un donjon.
+    private var companionAttackFactor: Double {
+        guard let c = activeCompanion else { return 1 }
+        return c.attackFactor * (isExploring ? c.dungeonAttackFactor : 1)
+    }
+    private var companionHPFactor: Double { activeCompanion?.hpFactor ?? 1 }
+    private var companionSpeedBonus: Double { activeCompanion?.speedBonus ?? 0 }
+    private var companionLuckBonus: Double { activeCompanion?.luckBonus ?? 0 }
+    private var companionRestFactor: Double { activeCompanion?.restFactor ?? 1 }
 
     /// Effet de l'état du héros sur ses coups : la faim et le cafard l'affaiblissent,
     /// la bonne humeur le galvanise.
@@ -256,8 +273,8 @@ final class GameState {
 
     private func cheer(_ amount: Double) { mood = min(max(mood + amount, 0), 100) }
     /// Fraction : 0.2 pour +20 %.
-    var speedBonus: Double { gear(.boots) / 100 + heroLook.speedBonus }
-    var luck: Double { gear(.ring) / 100 + heroLook.luckBonus }
+    var speedBonus: Double { gear(.boots) / 100 + heroLook.speedBonus + companionSpeedBonus }
+    var luck: Double { gear(.ring) / 100 + heroLook.luckBonus + companionLuckBonus }
     /// Part des dégâts évitée grâce à l'armure (0,2 pour 20 %).
     var defense: Double { gear(.armor) / 100 }
     /// Ce qui reste des dégâts une fois l'armure passée.
@@ -279,11 +296,48 @@ final class GameState {
         save()
         replan()
     }
+
+    // MARK: Compagnons
+
+    /// Compagnons déjà apprivoisés, dans l'ordre de l'enum.
+    var ownedCompanions: [CompanionKind] { CompanionKind.allCases.filter { unlockedCompanions.contains($0.rawValue) } }
+    func owns(_ companion: CompanionKind) -> Bool { unlockedCompanions.contains(companion.rawValue) }
+    /// On ne change de compagnon qu'au feu de camp.
+    var canSwapCompanion: Bool { if case .resting = activity { true } else { false } }
+
+    /// Choisit le compagnon actif (ou aucun avec `nil`). Sans effet hors du camp
+    /// ou pour un compagnon non débloqué.
+    func setCompanion(_ choice: CompanionKind?) {
+        guard canSwapCompanion, choice != activeCompanion else { return }
+        if let choice, !owns(choice) { return }
+        activeCompanion = choice
+        if let choice {
+            let named = choice.theName.prefix(1).uppercased() + choice.theName.dropFirst()
+            log("pawprint.fill", "\(named) accompagne désormais \(name).", .good)
+        } else {
+            log("pawprint", "\(name) repart seul, sans compagnon.", .neutral)
+        }
+        refreshUI()
+        save()
+        replan()
+    }
+
+    /// Rencontre d'un compagnon en balade : il est apprivoisé, et équipé s'il n'y en avait aucun.
+    private func tameCompanion(_ companion: CompanionKind, live: Bool) {
+        unlockedCompanions.insert(companion.rawValue)
+        if activeCompanion == nil { activeCompanion = companion }
+        cheer(15)
+        note(.find)
+        let named = companion.theName.prefix(1).uppercased() + companion.theName.dropFirst()
+        log("pawprint.fill", "\(named) se joint à \(name) en chemin !", .good)
+        if live { onEvent?(.companionFound(companion)) }
+    }
+
     var xpNeeded: Double { Self.xpNeeded(at: level) }
     private static func xpNeeded(at level: Int) -> Double { (30 * pow(1.35, Double(level - 1))).rounded() }
 
     /// Accélération du repos : sac de couchage et améliorations du feu.
-    var restBoost: Double { (hasBedroll ? 1.5 : 1) * (1 + 0.25 * Double(campLevel)) }
+    var restBoost: Double { (hasBedroll ? 1.5 : 1) * (1 + 0.25 * Double(campLevel)) * companionRestFactor }
     /// PV et énergie regagnés par seconde de jeu au feu de camp : 1,5 % des PV
     /// et 1 point d'énergie par minute, avant bonus.
     /// Le repos suit le rythme des donjons : une bonne nuit pour se remettre d'une grosse sortie.
@@ -1011,6 +1065,15 @@ final class GameState {
 
     /// Une trouvaille : surtout des provisions, parfois quelques pièces.
     private func findSomething(_ roam: inout Roam, live: Bool) {
+        // Rare rencontre (~5 %) : un compagnon encore inconnu croise la route du héros.
+        let strays = CompanionKind.allCases.filter { !unlockedCompanions.contains($0.rawValue) }
+        if !strays.isEmpty, Double.random(in: 0..<1, using: &rng) < 0.05 {
+            let companion = strays[Int.random(in: 0..<strays.count, using: &rng)]
+            tameCompanion(companion, live: live)
+            roam.found["compagnon", default: 0] += 1
+            gainXP(5 * Double(shopTier), live: live)
+            return
+        }
         let roll = Double.random(in: 0..<1, using: &rng)
         var provision: Provision?
         var coins = 0.0
@@ -1042,6 +1105,7 @@ final class GameState {
             guard let n = roam.found[p.rawValue], n > 0 else { return nil }
             return "\(Int(n)) \(p.label(Int(n)))"
         } + ((roam.found["or"] ?? 0) > 0 ? ["\((roam.found["or"] ?? 0).short) or"] : [])
+            + ((roam.found["compagnon"] ?? 0) > 0 ? ["un compagnon"] : [])
         activity = .resting
         cheer(10)
         roams += 1
@@ -2207,6 +2271,9 @@ final class GameState {
         var quests: [QuestKind]?
         var questProgress: [String: Int]?
         var questClaimed: [String]?
+        /// Absents des sauvegardes d'avant les compagnons.
+        var activeCompanion: CompanionKind?
+        var unlockedCompanions: [String]?
     }
 
     private func snapshot() -> SaveData {
@@ -2221,7 +2288,8 @@ final class GameState {
             hardcore: true, thirst: thirst, generation: generation, feats: [bossKills, flees, meals, cares], lastCare: lastCare,
             kills: kills, exploits: [Double(fightsWon), Double(roams), Double(provisionsFound), goldEarned, Double(dungeonsCleared)],
             claimedAchievements: Array(claimedAchievements), questDay: questDay, quests: quests,
-            questProgress: questProgress, questClaimed: Array(questClaimed)
+            questProgress: questProgress, questClaimed: Array(questClaimed),
+            activeCompanion: activeCompanion, unlockedCompanions: Array(unlockedCompanions)
         )
     }
 
@@ -2297,6 +2365,9 @@ final class GameState {
         quests = data.quests ?? []
         questProgress = data.questProgress ?? [:]
         questClaimed = Set(data.questClaimed ?? [])
+        unlockedCompanions = Set(data.unlockedCompanions ?? [])
+        // On ne garde un compagnon actif que s'il est bien débloqué.
+        activeCompanion = data.activeCompanion.flatMap { unlockedCompanions.contains($0.rawValue) ? $0 : nil }
         hp = min(hp, maxHP)
     }
 
@@ -2314,6 +2385,8 @@ final class GameState {
         bag = []
         unseenLoot = 0
         heroClass = nil
+        activeCompanion = nil
+        unlockedCompanions = []
         activity = .resting
         clears = Array(repeating: 0, count: Dungeon.all.count)
         bestRanks = Array(repeating: 0, count: Dungeon.all.count)
@@ -2369,11 +2442,14 @@ extension GameState {
     }
 
     /// Joue la suite sur la copie et prend une image du héros à intervalles réguliers :
-    /// toutes les dix minutes sur une journée, toutes les trente secondes en mode test.
+    /// toutes les cinq minutes sur quatorze heures, toutes les trente secondes en mode test.
+    /// Un pas plus serré rafraîchit le widget et la complication deux fois plus souvent ; la
+    /// fenêtre de 14 h couvre largement la nuit entre deux passages, et la chronologie envoyée
+    /// à la montre reste bien sous la limite de l'`updateApplicationContext` (~262 ko).
     fileprivate func sampleAhead(from now: Date) -> [HeroWidgetData.Frame] {
         let testing = timeScale > 1
-        let every: TimeInterval = testing ? 30 : 600
-        let count = testing ? 120 : 144
+        let every: TimeInterval = testing ? 30 : 300
+        let count = testing ? 120 : 168
         let lineage = generation
         let fallen = (name: name, portrait: heroLook.portrait, level: level)
         // Besoins figés sur l'état réel courant : le widget ne projette pas une fausse famine.

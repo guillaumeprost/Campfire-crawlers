@@ -98,6 +98,8 @@ final class WorldScene: SKScene {
     /// Sprite du coup spécial, plus grand que le héros, qui le remplace le temps de l'animation.
     private var specialSprite: SKSpriteNode?
     private let heroShadow = SKShapeNode()
+    /// Compagnon animal qui suit le héros, quand un compagnon est actif.
+    private let companion = SKSpriteNode()
     /// Éléments du lieu courant, vidés à chaque changement.
     private let props = SKNode()
     /// Effets qui survivent au changement de salle : monstre qui tombe, pièces, textes.
@@ -275,6 +277,11 @@ final class WorldScene: SKScene {
         hero.anchorPoint = CGPoint(x: 0.5, y: 0)
         hero.zPosition = 4
         addChild(hero)
+
+        companion.anchorPoint = CGPoint(x: 0.5, y: 0)
+        companion.zPosition = 3   // juste derrière le héros
+        companion.isHidden = true
+        addChild(companion)
 
         effects.zPosition = 8
         addChild(effects)
@@ -597,7 +604,47 @@ final class WorldScene: SKScene {
         hero.xScale = facing
         hero.position = heroPosition
         heroShadow.position = heroPosition
+        let companionAnim: String
+        switch game.activity {
+        case .traveling, .roaming, .exploring: companionAnim = "walk"
+        case .resting: companionAnim = sleepsAtCamp ? "sleep" : "sit"   // dort avec le héros, sinon assis au feu
+        default: companionAnim = "idle"                                  // boutique, taverne : debout
+        }
+        layoutCompanion(animation: companionAnim)
         placeScrolling()
+    }
+
+    /// Place et anime le compagnon derrière le héros, ou le cache s'il n'y en a pas
+    /// (ou tant que ses sprites ne sont pas installés).
+    private func layoutCompanion(animation: String) {
+        companion.removeAction(forKey: "anim")
+        companion.removeAction(forKey: "bob")
+        guard let kind = game.activeCompanion,
+              UIImage(named: kind.frames("walk")[0]) != nil else {
+            companion.isHidden = true
+            return
+        }
+        companion.isHidden = false
+        let moving = animation == "walk"
+        // Repli sur idle si l'animation demandée n'est pas encore installée.
+        let anim = UIImage(named: kind.frames(animation)[0]) != nil ? animation : "idle"
+        let perFrame: TimeInterval = moving ? 0.12 : (anim == "sleep" ? 0.5 : 0.3)
+        let frames = kind.frames(anim).map(Self.texture)
+        companion.run(.repeatForever(.animate(with: frames, timePerFrame: perFrame)), withKey: "anim")
+
+        let base = Self.texture(kind.frames("walk")[0]).size()
+        let scale = Self.heroScale * zoom * 0.72   // un peu plus petit que le héros
+        companion.size = CGSize(width: base.width * scale, height: base.height * scale)
+        companion.xScale = facing   // regarde dans le même sens que le héros
+        // Derrière le héros, du côté opposé à celui qu'il regarde.
+        let gap = hero.size.width * 0.5 + companion.size.width * 0.35
+        companion.position = CGPoint(x: heroPosition.x + facing * gap, y: feetY)
+        if moving {
+            let lift = max(companion.size.height * 0.02, 1).rounded()
+            companion.run(.repeatForever(.sequence([
+                .moveBy(x: 0, y: lift, duration: 0.16), .moveBy(x: 0, y: -lift, duration: 0.16),
+            ])), withKey: "bob")
+        }
     }
 
     private func heroFrames(_ animation: String) -> [SKTexture] {
@@ -1184,6 +1231,12 @@ final class WorldScene: SKScene {
             } else if gold > 0 {
                 burstCoins(count: 3, gold: gold)
             }
+        case .companionFound(let companion):
+            react("pawprint.fill", color: .systemYellow)
+            showBanner("\(companion.name) rejoint l'aventure")
+            floatText(companion.name, color: .systemYellow, size: 16,
+                      over: heroPosition, height: hero.size.height + 50)
+            UINotificationFeedbackGenerator().notificationOccurred(.success)
         }
     }
 

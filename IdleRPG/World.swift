@@ -133,16 +133,19 @@ enum HeroClass: String, Codable, CaseIterable, Identifiable {
     var perks: [String] {
         switch self {
         case .warrior: ["+30\u{00A0}% de PV"]
-        case .archer: ["+25\u{00A0}% de vitesse", "+25\u{00A0}% de chance au butin"]
-        case .mage: ["+25\u{00A0}% d'attaque", "-10\u{00A0}% de PV"]
+        case .archer: ["+25\u{00A0}% de vitesse", "+25\u{00A0}% de chance au butin", "+10\u{00A0}% de PV"]
+        case .mage: ["+25\u{00A0}% d'attaque", "-5\u{00A0}% de PV"]
         }
     }
 
+    // PV : l'archer gagne un léger +10 % et le mage ne perd plus que 5 %, pour que les
+    // trois classes finissent le jeu en un temps comparable (équilibré via Outils/equilibrage.py :
+    // la survie, pas les dégâts, était le goulot qui faisait traîner archer et mage).
     var hpFactor: Double {
         switch self {
         case .warrior: 1.3
-        case .archer: 1
-        case .mage: 0.9
+        case .archer: 1.1
+        case .mage: 0.95
         }
     }
 
@@ -185,6 +188,79 @@ enum HeroClass: String, Codable, CaseIterable, Identifiable {
 
     /// Image qui représente la classe dans les menus et l'activité en direct.
     var portrait: String { "hero_\(rawValue)_portrait" }
+}
+
+// MARK: - Compagnons
+
+/// Un animal de compagnie trouvé au hasard pendant les balades. Chacun améliore
+/// le héros à sa façon ; un seul peut être actif, et on en change au feu de camp.
+/// Sprites pixel art animés avec PixelLab, installés par `Art/import_companions.py`.
+enum CompanionKind: String, Codable, CaseIterable, Identifiable {
+    case wolf, panther, bear
+
+    var id: String { rawValue }
+
+    var name: String {
+        switch self {
+        case .wolf: "Loup blanc"
+        case .panther: "Panthère"
+        case .bear: "Ours"
+        }
+    }
+
+    /// Avec l'article, élidé devant une voyelle : « le Loup blanc », « l'Ours ».
+    var theName: String {
+        switch self {
+        case .wolf: "le Loup blanc"
+        case .panther: "la Panthère"
+        case .bear: "l'Ours"
+        }
+    }
+
+    var motto: String {
+        switch self {
+        case .wolf: "Féroce à tes côtés"
+        case .panther: "Vive et discrète"
+        case .bear: "Robuste et rassurant"
+        }
+    }
+
+    /// Bonus affichés dans la fiche et le sélecteur.
+    var perks: [String] {
+        switch self {
+        case .wolf: ["+15\u{00A0}% d'attaque", "+10\u{00A0}% d'attaque en donjon"]
+        case .panther: ["+12\u{00A0}% de vitesse", "+10\u{00A0}% de chance"]
+        case .bear: ["+20\u{00A0}% de PV max", "repos au feu plus rapide"]
+        }
+    }
+
+    // Bonus appliqués aux stats du héros (voir GameState).
+    /// Facteur multiplicatif d'attaque en permanence.
+    var attackFactor: Double { self == .wolf ? 1.15 : 1 }
+    /// Facteur d'attaque supplémentaire, seulement en donjon (le loup devient agressif).
+    var dungeonAttackFactor: Double { self == .wolf ? 1.10 : 1 }
+    var hpFactor: Double { self == .bear ? 1.20 : 1 }
+    /// Fractions ajoutées aux bonus du héros.
+    var speedBonus: Double { self == .panther ? 0.12 : 0 }
+    var luckBonus: Double { self == .panther ? 0.10 : 0 }
+    /// Facteur multiplicatif sur la vitesse de repos au camp.
+    var restFactor: Double { self == .bear ? 1.5 : 1 }
+
+    /// Noms des images d'une animation : walk (8 images), idle / sit / sleep (4 images).
+    func frames(_ animation: String) -> [String] {
+        let count = animation == "walk" ? 8 : 4
+        return (1...count).map { "companion_\(rawValue)_\(animation)_\($0)" }
+    }
+
+    var portrait: String { "companion_\(rawValue)_portrait" }
+
+    /// Symbole SF de repli (icône de notification, accessibilité).
+    var symbol: String {
+        switch self {
+        case .wolf, .bear: "pawprint.fill"
+        case .panther: "pawprint.fill"
+        }
+    }
 }
 
 // MARK: - Activité du héros

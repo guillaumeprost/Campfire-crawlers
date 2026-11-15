@@ -730,6 +730,9 @@ private struct CharacterSheet: View {
                         statRow("Vitesse", "+\(Int(game.speedBonus * 100))\u{00A0}%", "hare.fill", .green)
                         statRow("Chance", "+\(Int(game.luck * 100))\u{00A0}%", "clover.fill", .mint)
                         statRow("Fuite", "\(Int((game.escapeChance() * 100).rounded()))\u{00A0}%", "figure.run", .cyan)
+                        if let companion = game.activeCompanion {
+                            statRow("Compagnon", companion.name, "pawprint.fill", .yellow)
+                        }
                     }
 
                     card("Équipement") {
