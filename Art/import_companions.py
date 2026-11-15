@@ -23,7 +23,7 @@ ASSETS = os.path.join(ROOT, "IdleRPG", "Assets.xcassets")
 DEFAULT_SRC = "/private/tmp/claude-501/-Users-guillaumeprost--claude-spares-spare-y9MfRV/9d2a61a2-ca35-4d2e-af55-baad01a235ec/scratchpad/companions"
 
 # Nombre d'images retenu par animation (doit coller à CompanionKind.frames()).
-COUNTS = {"idle": 4, "walk": 8, "sit": 4, "sleep": 4}
+COUNTS = {"idle": 4, "walk": 8, "sit": 4, "sleep": 4, "attack": 6, "emote": 6}
 # Animations « posées » : on garde les dernières images (posture installée), pas le
 # début du mouvement, pour que la boucle montre l'animal assis / endormi et non en
 # train de s'asseoir / se coucher en boucle.

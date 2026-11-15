@@ -60,6 +60,8 @@ final class WorldScene: SKScene {
     private var blows: [GameState.Blow] = []
     private var blowIndex = 0
     private var restTimer: TimeInterval = 0
+    /// Au camp, le compagnon assis lance une petite émote de temps en temps.
+    private var companionEmoteTimer: TimeInterval = 0
     /// Au camp, le héros s'endort au lieu de s'occuper quand il est à bout :
     /// énergie sous un quart, ou PV ou moral sous la moitié.
     private var sleepsAtCamp: Bool {
@@ -647,6 +649,17 @@ final class WorldScene: SKScene {
         }
     }
 
+    /// Joue une fois l'émote du compagnon assis, puis reprend la pose assise.
+    private func playCompanionEmote() {
+        guard let kind = game.activeCompanion,
+              UIImage(named: kind.frames("emote")[0]) != nil else { return }
+        let emote = kind.frames("emote").map(Self.texture)
+        companion.run(.sequence([
+            .animate(with: emote, timePerFrame: 0.14),
+            .run { [weak self] in self?.layoutCompanion(animation: "sit") },
+        ]), withKey: "anim")
+    }
+
     private func heroFrames(_ animation: String) -> [SKTexture] {
         game.heroLook.frames(animation).map(Self.texture)
     }
@@ -854,6 +867,14 @@ final class WorldScene: SKScene {
                 feelingTimer = 0
                 showFeeling()
             }
+            // Le compagnon assis au feu lance une petite émote de temps en temps.
+            if !sleepsAtCamp, game.activeCompanion != nil, !companion.isHidden {
+                companionEmoteTimer += dt
+                if companionEmoteTimer >= 11 {
+                    companionEmoteTimer = 0
+                    playCompanionEmote()
+                }
+            }
         case .tavern:
             feelingTimer += dt
             if feelingTimer >= 7 {
@@ -925,6 +946,8 @@ final class WorldScene: SKScene {
         hpBar.position = CGPoint(x: min(encounterPosition.x, playWidth - 74), y: min(barTop, size.height - 120))
         hpBar.isHidden = false
         if boss { showBanner("BOSS !") }
+        // Le compagnon passe à l'attaque pendant le combat.
+        layoutCompanion(animation: "attack")
     }
 
     /// Joue un coup : celui du héros (animation de classe), ou celui du monstre qui bondit.
@@ -1254,6 +1277,8 @@ final class WorldScene: SKScene {
         encounterShadow.isHidden = true
         hero.removeAction(forKey: "dash")
         hero.position.x = heroPosition.x
+        // Combat terminé : le compagnon se remet à marcher vers la salle suivante.
+        if game.isExploring { layoutCompanion(animation: "walk") }
 
         let fight = room.kind == .monster || room.kind == .boss
         if room.hpDelta < 0, !fight {

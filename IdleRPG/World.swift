@@ -246,9 +246,14 @@ enum CompanionKind: String, Codable, CaseIterable, Identifiable {
     /// Facteur multiplicatif sur la vitesse de repos au camp.
     var restFactor: Double { self == .bear ? 1.5 : 1 }
 
-    /// Noms des images d'une animation : walk (8 images), idle / sit / sleep (4 images).
+    /// Noms des images d'une animation : walk (8), attack / emote (6), idle / sit / sleep (4).
     func frames(_ animation: String) -> [String] {
-        let count = animation == "walk" ? 8 : 4
+        let count: Int
+        switch animation {
+        case "walk": count = 8
+        case "attack", "emote": count = 6
+        default: count = 4
+        }
         return (1...count).map { "companion_\(rawValue)_\(animation)_\($0)" }
     }
 
