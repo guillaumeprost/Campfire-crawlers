@@ -242,7 +242,11 @@ struct ContentView: View {
             HStack(spacing: 2) {
                 let place = MapPanel.tab(for: game.activity)
                 sectionButton(.map, title: place.title, icon: place.icon, badge: 0)
-                sectionButton(.destinations, title: "Destinations", icon: "map.fill", badge: 0)
+                // Dans un donjon, le héros est engagé : choisir une destination ne sert à rien,
+                // on masque l'onglet le temps de l'exploration.
+                if !game.isExploring {
+                    sectionButton(.destinations, title: "Destinations", icon: "map.fill", badge: 0)
+                }
                 sectionButton(.gear, title: "Équipement", icon: "backpack.fill", badge: game.unseenLoot)
             }
             .padding(5)
