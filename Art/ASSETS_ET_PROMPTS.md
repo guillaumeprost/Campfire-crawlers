@@ -232,7 +232,7 @@ Refais chaque scène en `--ar 9:16` pour le portrait (garde `--tile`), et décli
 
 ## 10. Logo & icône (planche `03_logo` + `Art/icone.png`)
 
-- **Logo titre** : « Idle RPG » façon bannière fantasy.
+- **Logo titre** : « Campfire Crawlers » façon bannière fantasy.
 - **Icône d'app** : personnage/symbole lisible en petit, carré.
 ```
 app icon for a fantasy idle RPG, a bold heroic emblem (sword + shield or hero face), vibrant, readable at small size, rounded square, no text --v 6.1 --ar 1:1

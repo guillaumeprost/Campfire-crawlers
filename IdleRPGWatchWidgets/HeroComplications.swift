@@ -264,7 +264,7 @@ private struct EmptyComplication: View {
             Label("Aucun héros", systemImage: "flame")
         case .accessoryRectangular:
             VStack(alignment: .leading) {
-                Text("Idle RPG").font(.headline).widgetAccentable()
+                Text("Campfire Crawlers").font(.headline).widgetAccentable()
                 Text("Ouvrez le jeu").font(.caption)
             }
             .frame(maxWidth: .infinity, alignment: .leading)

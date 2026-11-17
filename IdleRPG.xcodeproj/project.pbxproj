@@ -533,7 +533,7 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "IdleRPG-Info.plist";
-				INFOPLIST_KEY_CFBundleDisplayName = "Idle RPG";
+				INFOPLIST_KEY_CFBundleDisplayName = "Campfire Crawlers";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.role-playing-games";
 				INFOPLIST_KEY_NSSupportsLiveActivities = YES;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
@@ -562,7 +562,7 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "IdleRPG-Info.plist";
-				INFOPLIST_KEY_CFBundleDisplayName = "Idle RPG";
+				INFOPLIST_KEY_CFBundleDisplayName = "Campfire Crawlers";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.role-playing-games";
 				INFOPLIST_KEY_NSSupportsLiveActivities = YES;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
@@ -589,7 +589,7 @@
 				DEVELOPMENT_TEAM = 39GA99UABK;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "IdleRPGWidgets-Info.plist";
-				INFOPLIST_KEY_CFBundleDisplayName = "Idle RPG";
+				INFOPLIST_KEY_CFBundleDisplayName = "Campfire Crawlers";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -614,7 +614,7 @@
 				DEVELOPMENT_TEAM = 39GA99UABK;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "IdleRPGWidgets-Info.plist";
-				INFOPLIST_KEY_CFBundleDisplayName = "Idle RPG";
+				INFOPLIST_KEY_CFBundleDisplayName = "Campfire Crawlers";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -641,7 +641,7 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "IdleRPGWatch-Info.plist";
-				INFOPLIST_KEY_CFBundleDisplayName = "Idle RPG";
+				INFOPLIST_KEY_CFBundleDisplayName = "Campfire Crawlers";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -668,7 +668,7 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "IdleRPGWatch-Info.plist";
-				INFOPLIST_KEY_CFBundleDisplayName = "Idle RPG";
+				INFOPLIST_KEY_CFBundleDisplayName = "Campfire Crawlers";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -693,7 +693,7 @@
 				DEVELOPMENT_TEAM = 39GA99UABK;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "IdleRPGWatchWidgets-Info.plist";
-				INFOPLIST_KEY_CFBundleDisplayName = "Idle RPG";
+				INFOPLIST_KEY_CFBundleDisplayName = "Campfire Crawlers";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -720,7 +720,7 @@
 				DEVELOPMENT_TEAM = 39GA99UABK;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "IdleRPGWatchWidgets-Info.plist";
-				INFOPLIST_KEY_CFBundleDisplayName = "Idle RPG";
+				INFOPLIST_KEY_CFBundleDisplayName = "Campfire Crawlers";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
