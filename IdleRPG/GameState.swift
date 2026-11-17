@@ -338,11 +338,12 @@ final class GameState {
 
     /// Accélération du repos : sac de couchage et améliorations du feu.
     var restBoost: Double { (hasBedroll ? 1.5 : 1) * (1 + 0.25 * Double(campLevel)) * companionRestFactor }
-    /// PV et énergie regagnés par seconde de jeu au feu de camp : 1,5 % des PV
-    /// et 1 point d'énergie par minute, avant bonus.
-    /// Le repos suit le rythme des donjons : une bonne nuit pour se remettre d'une grosse sortie.
-    private var hpRegen: Double { maxHP * 0.015 / 60 / Dungeon.pace * restBoost * (injured ? 0.5 : 1) * (hunger <= 0 ? 0.5 : 1) }
-    private var energyRegen: Double { 1.0 / 60 / Dungeon.pace * restBoost }
+    /// PV et énergie regagnés par seconde de jeu au feu de camp : 2,2 % des PV
+    /// et 1,8 point d'énergie par minute, avant bonus.
+    /// Le repos reste calé sur le rythme des donjons, mais plus court qu'avant : on en avait assez
+    /// d'attendre une sortie entière pour repartir, surtout après les petits donjons.
+    private var hpRegen: Double { maxHP * 0.022 / 60 / Dungeon.pace * restBoost * (injured ? 0.5 : 1) * (hunger <= 0 ? 0.5 : 1) }
+    private var energyRegen: Double { 1.8 / 60 / Dungeon.pace * restBoost }
 
     /// Prix des améliorations successives du feu de camp.
     static let campPrices: [Double] = [500, 2_500, 10_000, 40_000, 160_000]
@@ -1176,7 +1177,7 @@ final class GameState {
             let scale = Dungeon.rankScale(run.level)
             let boss = room.kind == .boss
             room.knockedOut = false
-            room.gold = (dungeon.gold * scale * (boss ? 10 : 1)).rounded()
+            room.gold = (dungeon.gold * scale * (boss ? 10 : 1) * Self.goldDropFactor).rounded()
             room.xp = dungeon.xp * scale * (boss ? 5 : 1)
         }
         room.hpDelta = (potion ? potionHeal : 0) - taken
@@ -1271,6 +1272,11 @@ final class GameState {
 
     // MARK: Salles
 
+    /// Les pièces ramassées sur les monstres, boss et coffres sont réduites (−35 %) : on veut que
+    /// le butin vienne surtout des objets, qu'on équipe ou qu'on revend. La valeur de revente des
+    /// objets, elle, ne bouge pas (voir `Item.random`), donc elle pèse plus lourd qu'avant.
+    static let goldDropFactor = 0.65
+
     private func makeRoom(_ dungeon: Dungeon, index: Int, rank: Int, boosted: Bool,
                           blessings: [Blessing] = [], forced: RoomKind? = nil) -> Room {
         var kind = Self.roomKind(index: index, rooms: dungeon.rooms, using: &rng)
@@ -1297,7 +1303,7 @@ final class GameState {
             var item: Item?
             if boss {
                 item = Item.random(tier: dungeon.tier, rank: rank, floor: .rare, luck: luck, hero: heroLook, using: &rng)
-            } else if Double.random(in: 0..<1, using: &rng) < 0.05 * (1 + luck) {
+            } else if Double.random(in: 0..<1, using: &rng) < 0.11 * (1 + luck) {
                 item = Item.random(tier: dungeon.tier, rank: rank, luck: luck, hero: heroLook, using: &rng)
             }
             // Un monstre sur huit laisse tomber quelque chose à manger ou à boire.
@@ -1305,14 +1311,14 @@ final class GameState {
                 ? [Provision.fruit, .ration, .tea, .water].randomElement(using: &rng) : nil
             return Room(kind: kind, sprite: foe.sprite, name: foe.name,
                         hpDelta: needsPotion ? potionHeal - damage : -damage,
-                        gold: (dungeon.gold * scale * (boss ? 10 : 1) * spread * fortune).rounded(),
+                        gold: (dungeon.gold * scale * (boss ? 10 : 1) * spread * fortune * Self.goldDropFactor).rounded(),
                         xp: dungeon.xp * scale * (boss ? 5 : 1), item: item, knockedOut: false,
                         usesPotion: needsPotion, provision: snack)
         case .chest:
-            let lucky = Double.random(in: 0..<1, using: &rng) < min(0.3 * (1 + luck), 0.95)
+            let lucky = Double.random(in: 0..<1, using: &rng) < min(0.5 * (1 + luck), 0.95)
             let provision = Double.random(in: 0..<1, using: &rng) < 0.4 ? Provision.allCases.randomElement(using: &rng) : nil
             return Room(kind: .chest, sprite: "chest_closed", name: "Coffre", hpDelta: 0,
-                        gold: (dungeon.gold * scale * 4 * spread * fortune).rounded(), xp: 0,
+                        gold: (dungeon.gold * scale * 4 * spread * fortune * Self.goldDropFactor).rounded(), xp: 0,
                         item: lucky ? Item.random(tier: dungeon.tier, rank: rank, luck: luck, hero: heroLook, using: &rng) : nil,
                         knockedOut: false, provision: provision)
         case .trap:

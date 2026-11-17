@@ -5,9 +5,10 @@ Il simule un joueur qui passe quatre fois par jour, de prudent à téméraire, j
 import math, random, statistics, sys
 
 P = dict(  # paramètres réglables
-    rank_factor=1.35, item_factor=1.15, chest_item=0.3, chest_time=0.4, monster_item=0.05, max_rank=5,
-    energy=[6, 15, 30, 55, 90], energy_regen=1.0,     # énergie par minute
-    hp_regen=0.015,                                    # part des PV max par minute
+    rank_factor=1.35, item_factor=1.15, chest_item=0.5, chest_time=0.4, monster_item=0.11, max_rank=5,
+    coin_mult=0.65,                                    # pièces ramassées (monstres, boss, coffres) réduites
+    energy=[6, 15, 30, 55, 90], energy_regen=1.8,     # énergie par minute
+    hp_regen=0.022,                                    # part des PV max par minute
     injury=0.5,                                        # régénération des PV pendant une blessure
     flee_gold_loss=0.5,
     fire_costs=[500, 2500, 10000, 40000, 160000], fire_step=0.25,
@@ -27,7 +28,7 @@ P = dict(  # paramètres réglables
     ration=20, water=10, boots_div=400, ring_div=800,
     # Rythme réel : facteur appliqué aux durées des donjons, aux trajets et au repos ;
     # heures de passage du joueur « sessions » (il ne relance le héros qu'à ces moments-là).
-    time_factor=8.5, sessions=(8, 12.5, 19, 22.5),
+    time_factor=12, sessions=(8, 12.5, 19, 22.5),
     mode='off',   # 'off' : règles d'avant ; 'idle' : joueur absent ; 'active' : joueur attentif ;
                   # 'tavern' : joueur absent qui emmène le héros à la taverne quand le moral flanche
 )
@@ -168,7 +169,7 @@ class Game:
                 else:
                     if dmg >= hp: potions -= 1; hp += heal()
                     hp = min(max(hp - dmg, 1), maxhp)
-                    gold += round(d['gold'] * k * (10 if boss else 1) * spread * gmul)
+                    gold += round(d['gold'] * k * (10 if boss else 1) * spread * gmul * P['coin_mult'])
                     charge = min(charge + 1 / P['skill_victories'], 1)
                     if real and new:
                         s.cheer(10 if boss else 1)
@@ -181,7 +182,7 @@ class Game:
                         xp -= round(30 * P['xp_growth'] ** (level - 1)); level += 1; hp += round(20 * s.hpf)
                         maxhp = round((100 + 20 * (level - 1) + s.g('amulet')) * s.hpf); atk = round((10 + 3 * (level - 1) + s.g('weapon')) * s.atkf)
             elif kind == 'chest':
-                gold += round(d['gold'] * k * 4 * spread * gmul)
+                gold += round(d['gold'] * k * 4 * spread * gmul * P['coin_mult'])
                 spent -= 1 - P['chest_time']
                 if real and r.random() < min(P['chest_item'] * (1 + s.luck()), 0.95): loot.append(s.item(i + 1, rank, 0, s.luck(), r))
             elif kind == 'trap':
