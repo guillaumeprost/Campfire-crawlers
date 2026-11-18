@@ -301,6 +301,8 @@ struct Room: Codable {
     var usesPotion: Bool?
     /// Provision trouvée dans la salle : fruits, tisane, herbes...
     var provision: Provision?
+    /// Pièges : nil tant que le défi n'a pas eu lieu, true s'il a été désamorcé à temps, false s'il s'est déclenché.
+    var trapDisarmed: Bool?
 }
 
 struct Run: Codable {

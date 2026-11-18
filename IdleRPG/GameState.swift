@@ -29,6 +29,32 @@ enum GameEvent {
     case bought(sprite: String, price: Double, caption: String)
     /// Vente au marchand.
     case sold(gold: Double)
+    /// Un piège se déclenche : le joueur a un court instant pour le désamorcer.
+    case trapTriggered
+    /// Piège désamorcé à temps : aucun dégât.
+    case trapDisarmed
+}
+
+/// Défi de désamorçage : un curseur balaie une barre, le joueur tape quand il passe sur la zone verte.
+/// Purement temps réel (non sauvegardé) : s'il n'est pas relevé, le piège se déclenche normalement.
+struct TrapPrompt: Equatable {
+    /// Début du balayage, en temps réel.
+    let start: Date
+    /// Durée d'un passage complet du curseur, de gauche à droite.
+    let sweep: TimeInterval
+    /// Bord gauche de la zone verte, en fraction de la barre (0…1).
+    let zoneStart: Double
+    /// Largeur de la zone verte, en fraction de la barre.
+    let zoneWidth: Double
+
+    /// Instant où le défi expire et le piège se déclenche de lui-même.
+    var deadline: Date { start.addingTimeInterval(sweep) }
+
+    /// Le curseur touche-t-il la zone verte à l'instant `now` ?
+    func isHit(at now: Date) -> Bool {
+        let frac = now.timeIntervalSince(start) / sweep
+        return frac >= zoneStart && frac <= zoneStart + zoneWidth
+    }
 }
 
 // MARK: - État du jeu
@@ -121,6 +147,8 @@ final class GameState {
 
     // Monde
     private(set) var activity: Activity = .resting
+    /// Défi de piège en cours, le cas échéant. Transitoire : jamais sauvegardé.
+    private(set) var trapPrompt: TrapPrompt?
     private(set) var clears: [Int] = Array(repeating: 0, count: Dungeon.all.count)
     /// Meilleur rang terminé dans chaque donjon, 0 si aucun.
     private(set) var bestRanks: [Int] = Array(repeating: 0, count: Dungeon.all.count)
@@ -709,6 +737,8 @@ final class GameState {
         let real = now.timeIntervalSince(lastTick)
         guard real > 0 else { return }
         lastTick = now
+        // Chrono écoulé (ou retour d'arrière-plan après l'échéance) : le piège se déclenche de lui-même.
+        if let prompt = trapPrompt, now >= prompt.deadline { disarmTrap(success: false) }
         advance(by: real * timeScale, live: real < 2)
         if now.timeIntervalSince(lastUIRefresh) >= 0.2 {
             lastUIRefresh = now
@@ -796,7 +826,8 @@ final class GameState {
     private var activityEventTime: TimeInterval? {
         switch activity {
         case .traveling(let trip): trip.end
-        case .exploring(let run): run.roomEnd
+        // Un défi de piège fige la salle : plus rien ne se résout tant que le joueur n'a pas tranché.
+        case .exploring(let run): trapPrompt == nil ? run.roomEnd : nil
         case .roaming(let roam): min(roam.nextFind, roam.end)
         case .resting, .shopping, .tavern: nil
         }
@@ -1211,6 +1242,40 @@ final class GameState {
         replan()
     }
 
+    // MARK: Pièges
+
+    /// Ouvre le défi de désamorçage : la salle est figée tant que le joueur n'a pas tranché.
+    private func openTrapPrompt(_ run: Run) {
+        // Zone verte confortable, placée au hasard pour que le timing ne soit pas appris par cœur.
+        // (À resserrer plus tard selon le donjon pour des pièges plus retors en profondeur.)
+        let width = 0.28
+        let start = Double.random(in: 0.15...(0.85 - width), using: &rng)
+        trapPrompt = TrapPrompt(start: Date(), sweep: 2.4, zoneStart: start, zoneWidth: width)
+        onEvent?(.trapTriggered)
+        refreshUI()
+    }
+
+    /// Le joueur a tapé (ou le chrono a expiré) : on applique le verdict puis on résout la salle.
+    func disarmTrap(success: Bool) {
+        guard trapPrompt != nil, case .exploring(var run) = activity, run.room.kind == .trap,
+              run.room.trapDisarmed == nil else { trapPrompt = nil; return }
+        trapPrompt = nil
+        if success {
+            run.room.hpDelta = 0
+            run.room.knockedOut = false
+            run.room.trapDisarmed = true
+            cheer(2)
+            onEvent?(.trapDisarmed)
+        } else {
+            run.room.trapDisarmed = false
+        }
+        activity = .exploring(run)
+        resolve(run, live: true)
+        refreshUI()
+        save()
+        replan()
+    }
+
     /// Choix d'une bénédiction au carrefour en cours.
     func chooseBlessing(_ index: Int) {
         guard case .exploring(var run) = activity, let fork = run.fork, fork.indices.contains(index) else { return }
@@ -1345,6 +1410,12 @@ final class GameState {
         let room = run.room
         let label = room.kind == .boss ? "Boss" : "Salle \(run.roomIndex + 1)"
 
+        // Piège rencontré en direct : on laisse au joueur un instant pour le désamorcer avant de trancher.
+        if room.kind == .trap, room.trapDisarmed == nil, live, !isForecast {
+            openTrapPrompt(run)
+            return
+        }
+
         if room.usesPotion == true, potions > 0 {
             potions -= 1
             // La scène a déjà montré la potion au moment du coup qui l'a rendue nécessaire.
@@ -1388,7 +1459,11 @@ final class GameState {
         case .chest:
             log("shippingbox.fill", "\(label) · Coffre : +\(room.gold.short) or.", .good)
         case .trap:
-            log("exclamationmark.triangle.fill", "\(label) · Piège : -\(damage) PV.", .bad)
+            if room.trapDisarmed == true {
+                log("checkmark.shield.fill", "\(label) · Piège désamorcé à temps : aucun dégât.", .good)
+            } else {
+                log("exclamationmark.triangle.fill", "\(label) · Piège : -\(damage) PV.", .bad)
+            }
         case .fountain:
             log("drop.fill", "\(label) · Sanctuaire : +\(Int(room.hpDelta)) PV.", .good)
         }

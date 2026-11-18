@@ -1237,6 +1237,13 @@ final class WorldScene: SKScene {
             floatText(companion.name, color: .systemYellow, size: 16,
                       over: heroPosition, height: hero.size.height + 50)
             UINotificationFeedbackGenerator().notificationOccurred(.success)
+        case .trapTriggered:
+            UIImpactFeedbackGenerator(style: .rigid).impactOccurred()
+        case .trapDisarmed:
+            react("checkmark.shield.fill", color: .systemGreen)
+            floatText("Désamorcé !", color: .systemGreen, size: 18, over: heroPosition, height: hero.size.height + 50)
+            burst("fx_heal", height: 50, at: heroPosition)
+            UINotificationFeedbackGenerator().notificationOccurred(.success)
         }
     }
 
@@ -1301,6 +1308,11 @@ final class WorldScene: SKScene {
                 .wait(forDuration: 0.6), .fadeOut(withDuration: 0.3), .removeFromParent(),
             ]))
         case .trap:
+            // Désamorcé : la dalle s'efface sans que les pics ne jaillissent.
+            if room.trapDisarmed == true {
+                node.run(.sequence([.wait(forDuration: 0.3), .fadeOut(withDuration: 0.3), .removeFromParent()]))
+                return
+            }
             // Les pics jaillissent d'un coup, la dalle tremble, puis tout s'efface.
             node.texture = Self.texture("trap_spikes_up")
             node.run(.sequence([

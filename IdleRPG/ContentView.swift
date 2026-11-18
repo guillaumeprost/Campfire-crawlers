@@ -85,6 +85,14 @@ struct ContentView: View {
                     .ignoresSafeArea()
             }
         }
+        // Un piège se déclenche : le défi de désamorçage recouvre toute la scène.
+        .overlay {
+            if let prompt = game.trapPrompt {
+                TrapChallengeView(prompt: prompt) { game.disarmTrap(success: $0) }
+                    .transition(.opacity)
+            }
+        }
+        .animation(.easeOut(duration: 0.2), value: game.trapPrompt)
         .onGeometryChange(for: CGFloat.self) { proxy in
             // Zone cachée à droite par le panneau en paysage, nulle en portrait.
             proxy.size.width > proxy.size.height ? Self.sidePanel + panelMargin(proxy.safeAreaInsets.trailing) + 12 : 0
@@ -1074,6 +1082,73 @@ extension View {
 
 /// Actions du joueur pendant un combat : le coup spécial, qui se charge en gagnant des combats,
 /// et une potion à faire boire au héros.
+/// Défi de piège : un curseur balaie la barre, le joueur tape quand il passe sur la zone verte.
+/// Un seul tap : dans le vert, le piège est désamorcé ; à côté ou chrono écoulé, il se déclenche.
+private struct TrapChallengeView: View {
+    let prompt: TrapPrompt
+    let onResult: (Bool) -> Void
+    @State private var answered = false
+
+    private func resolve() {
+        guard !answered else { return }
+        answered = true
+        onResult(prompt.isHit(at: Date()))
+    }
+
+    var body: some View {
+        ZStack {
+            Color.black.opacity(0.55).ignoresSafeArea()
+
+            VStack(spacing: 22) {
+                Label("PIÈGE !", systemImage: "exclamationmark.triangle.fill")
+                    .font(.title2.weight(.heavy))
+                    .foregroundStyle(Color(red: 1, green: 0.78, blue: 0.2))
+                    .labelStyle(.titleAndIcon)
+
+                Text("Tape quand le curseur est dans le vert")
+                    .font(.subheadline.weight(.medium))
+                    .foregroundStyle(.white.opacity(0.85))
+
+                TimelineView(.animation) { timeline in
+                    let frac = min(max(timeline.date.timeIntervalSince(prompt.start) / prompt.sweep, 0), 1)
+                    GeometryReader { geo in
+                        let w = geo.size.width
+                        ZStack(alignment: .leading) {
+                            Capsule().fill(.white.opacity(0.14))
+                            // Zone verte à viser.
+                            Capsule()
+                                .fill(Color(red: 0.3, green: 0.85, blue: 0.4))
+                                .frame(width: w * prompt.zoneWidth)
+                                .offset(x: w * prompt.zoneStart)
+                            // Curseur qui balaie.
+                            RoundedRectangle(cornerRadius: 3)
+                                .fill(.white)
+                                .frame(width: 5)
+                                .shadow(color: .black.opacity(0.5), radius: 2)
+                                .offset(x: min(w * frac, w - 5))
+                        }
+                    }
+                    .frame(height: 26)
+                }
+                .frame(height: 26)
+                .padding(.horizontal, 40)
+
+                Text("DÉSAMORCER")
+                    .font(.headline.weight(.bold))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 36)
+                    .padding(.vertical, 14)
+                    .background(Capsule().fill(Color(red: 0.82, green: 0.22, blue: 0.16)))
+                    .overlay(Capsule().stroke(.white.opacity(0.35), lineWidth: 1.5))
+            }
+            .padding(.vertical, 30)
+            .frame(maxWidth: 420)
+        }
+        .contentShape(Rectangle())
+        .onTapGesture { resolve() }
+    }
+}
+
 private struct CombatActions: View {
     let game: GameState
 

@@ -216,4 +216,18 @@ final class GameStateTests: XCTestCase {
         XCTAssertTrue((0...1).contains(death))
         XCTAssertGreaterThan(success, 0.5, "La Cave au rang 1 reste abordable pour un héros neuf.")
     }
+
+    // MARK: Pièges
+
+    /// La détection du tap : le curseur touche la zone verte quand sa position tombe dedans.
+    func testTrapPromptHitDetection() {
+        // Zone verte sur [0,4 ; 0,6] de la barre, balayée en 2 s.
+        let prompt = TrapPrompt(start: Date(), sweep: 2, zoneStart: 0.4, zoneWidth: 0.2)
+        // À 1,0 s le curseur est à mi-course (0,5) : en plein dans le vert.
+        XCTAssertTrue(prompt.isHit(at: prompt.start.addingTimeInterval(1.0)), "Tap au centre du vert : réussi.")
+        // À 0,4 s (0,2) : avant le vert.
+        XCTAssertFalse(prompt.isHit(at: prompt.start.addingTimeInterval(0.4)), "Tap trop tôt : raté.")
+        // À 1,8 s (0,9) : après le vert.
+        XCTAssertFalse(prompt.isHit(at: prompt.start.addingTimeInterval(1.8)), "Tap trop tard : raté.")
+    }
 }
