@@ -228,6 +228,7 @@ private struct EmptyHero: View {
                 .font(.caption2)
                 .foregroundStyle(.white.opacity(0.7))
                 .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
         }
         .padding()
     }

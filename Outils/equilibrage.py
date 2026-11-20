@@ -1,7 +1,10 @@
 """Simulateur d'équilibrage : reproduit les règles de GameState.swift, World.swift et Item.swift.
 
 À tenir à jour avec le jeu. Lancer : python3 Outils/equilibrage.py [nombre de parties]
-Il simule un joueur qui passe quatre fois par jour, de prudent à téméraire, jusqu'à la fin du jeu."""
+Il simule un joueur qui passe quatre fois par jour, de prudent à téméraire, jusqu'à la fin du jeu.
+
+Simulés : la nuit et la météo (Ambient.swift). Pas encore simulés : les reliques, l'héritage choisi
+(le successeur reçoit toujours un quart de l'or) et les visiteurs du camp."""
 import math, random, statistics, sys
 
 P = dict(  # paramètres réglables
@@ -25,10 +28,17 @@ P = dict(  # paramètres réglables
     thirsty=0.85, thirst_span=36000, hunger_span=57600,
     escape_base=0.75, escape_ko=0.35, escape_boss=0.10, escape_fatigue=0.25,
     escape_needy=0.15, escape_empty=0.25, escape_injured=0.10, legacy=0.25,
-    ration=20, water=10, boots_div=400, ring_div=800,
+    ration=25, water=12, boots_div=400, ring_div=800,
     # Rythme réel : facteur appliqué aux durées des donjons, aux trajets et au repos ;
     # heures de passage du joueur « sessions » (il ne relance le héros qu'à ces moments-là).
     time_factor=12, sessions=(8, 12.5, 19, 22.5),
+    # Heure et météo (Ambient.swift) : la nuit va de 19 h à 7 h, le temps change toutes les 3 h.
+    ambient=True, night_dmg=1.15, night_gold=1.25, night_rest=1.25,
+    weather=(('clear', 0.56), ('rain', 0.22), ('fog', 0.12), ('storm', 0.10)),
+    wet_rest=0.75, fog_travel=1.15, storm_travel=1.25, fog_escape=0.10,
+    # Économie : part de la valeur d'un objet rendue à la revente, progression de l'or par rang
+    # (les monstres, eux, suivent rank_factor), prix de base, quêtes du jour réclamées (or × 3^(palier-1)).
+    resale=0.3, gold_rank=1.2, potion=45, bedroll=400, quest=25, quests_per_day=2,
     mode='off',   # 'off' : règles d'avant ; 'idle' : joueur absent ; 'active' : joueur attentif ;
                   # 'tavern' : joueur absent qui emmène le héros à la taverne quand le moral flanche
 )
@@ -45,6 +55,20 @@ CAP = {'boots': 60, 'ring': 150, 'armor': 30, 'helmet': 15}
 RARITY = [(1, 4), (1.5, 10), (2.2, 25), (3.5, 70)]
 
 def scale(rank): return P['rank_factor'] ** (rank - 1)
+def gold_scale(rank): return P['gold_rank'] ** (rank - 1)
+def is_night(t): return P['ambient'] and not 7 <= (t % 86400) / 3600 < 19
+def weather(t):
+    """Le temps d'un créneau de trois heures : il ne dépend que de l'heure, comme dans le jeu."""
+    if not P['ambient']: return 'clear'
+    x = random.Random(int(t // 10800) * 7919 + 13).random()
+    for name, share in P['weather']:
+        if x < share: return name
+        x -= share
+    return 'clear'
+def rest_factor(t):
+    return (P['night_rest'] if is_night(t) else 1) * (P['wet_rest'] if weather(t) in ('rain', 'storm') else 1)
+def travel_factor(t):
+    return {'fog': P['fog_travel'], 'storm': P['storm_travel']}.get(weather(t), 1)
 def max_rank(i): return 999 if i == 4 else P['max_rank']
 
 class Item:
@@ -65,7 +89,7 @@ class Game:
         s.hunger, s.mood, s.charge, s.boss_kills = 80.0, 70.0, 0.0, 0
         s.thirst, s.deaths = 80.0, 0
         s.hp = s.maxhp(); s.energy = 100.0; s.t = 0.0
-        s.first = {}; s.st = dict(runs=0, fled=0, exhausted=0, rest=0.0, travel=0.0, explore=0.0, spent=0.0, lost_items=0, lost_gold=0.0, earned=0.0, tavern=0.0, deaths=0)
+        s.first = {}; s.st = dict(runs=0, fled=0, exhausted=0, rest=0.0, travel=0.0, explore=0.0, spent=0.0, lost_items=0, lost_gold=0.0, earned=0.0, tavern=0.0, deaths=0, needs=0.0)
     def g(s, slot): return s.gear[slot].eff() if slot in s.gear else 0
     def maxhp(s): return round((100 + 20 * (s.level - 1) + s.g('amulet')) * s.hpf)
     def condition(s):
@@ -111,17 +135,29 @@ class Game:
         if slot in CAP: bonus = min(bonus, CAP[slot])
         return Item(slot, max(round(bonus), 1), math.ceil(DUNGEONS[tier - 1]['gold'] * RARITY[rar][1] * P['item_factor'] ** (rank - 1)))
     def rest(s, seconds):
-        b = s.boost()
-        hreg = s.maxhp() * P['hp_regen'] / P['time_factor'] / 60 * b * (P['injury'] if s.injured else 1)
-        s.hp = min(s.maxhp(), s.hp + hreg * seconds)
-        if s.hp >= s.maxhp(): s.injured = False
-        s.energy = min(100, s.energy + P['energy_regen'] / P['time_factor'] / 60 * b * seconds)
-        s.wear(seconds, idle_camp=True)
-        s.t += seconds; s.st['rest'] += seconds
+        # Heure par heure : on dort mieux la nuit, moins bien sous la pluie.
+        left = seconds
+        while left > 1e-9:
+            step = min(left, 3600 - s.t % 3600) if P['ambient'] else left
+            b = s.boost() * rest_factor(s.t)
+            hreg = s.maxhp() * P['hp_regen'] / P['time_factor'] / 60 * b * (P['injury'] if s.injured else 1)
+            s.hp = min(s.maxhp(), s.hp + hreg * step)
+            if s.hp >= s.maxhp(): s.injured = False
+            s.energy = min(100, s.energy + P['energy_regen'] / P['time_factor'] / 60 * b * step)
+            s.wear(step, idle_camp=True)
+            s.t += step; s.st['rest'] += step; left -= step
     def time_to_rest(s):
-        b = s.boost()
-        hreg = s.maxhp() * P['hp_regen'] / P['time_factor'] / 60 * b * (P['injury'] if s.injured else 1)
-        return max((s.maxhp() - s.hp) / hreg, (100 - s.energy) / (P['energy_regen'] / P['time_factor'] / 60 * b), 0)
+        hp, energy, t, total = s.hp, s.energy, s.t, 0.0
+        while hp < s.maxhp() or energy < 100:
+            b = s.boost() * rest_factor(t)
+            hreg = s.maxhp() * P['hp_regen'] / P['time_factor'] / 60 * b * (P['injury'] if s.injured else 1)
+            ereg = P['energy_regen'] / P['time_factor'] / 60 * b
+            need = max((s.maxhp() - hp) / hreg, (100 - energy) / ereg, 0)
+            step = min(need, 3600 - t % 3600) if P['ambient'] else need
+            hp = min(s.maxhp(), hp + hreg * step); energy = min(100, energy + ereg * step)
+            t += step; total += step
+            if step >= need: break
+        return total
     def gain(s, xp):
         s.xp += xp
         while s.xp >= s.xpneed():
@@ -130,14 +166,14 @@ class Game:
         cur = s.gear.get(it.slot)
         if cur is None or it.eff() > cur.eff():
             ratio = s.hp / s.maxhp()
-            if cur: s.gold += cur.value; s.st['earned'] += cur.value
+            if cur: s.gold += cur.value * P['resale']; s.st['earned'] += cur.value * P['resale']
             s.gear[it.slot] = it
             if it.slot == 'amulet': s.hp = max(round(s.maxhp() * ratio), 1)
         else:
-            s.gold += it.value; s.st['earned'] += it.value
+            s.gold += it.value * P['resale']; s.st['earned'] += it.value * P['resale']
     def expedition(s, i, rank, r, real):
         """Joue une sortie. Renvoie l'issue ; si real, applique les gains."""
-        d = DUNGEONS[i]; k = scale(rank)
+        d = DUNGEONS[i]; k = scale(rank); kg = gold_scale(rank)
         hp, energy, potions, level, xp = s.hp, s.energy, s.potions, s.level, s.xp
         maxhp, atk = s.maxhp(), s.attack()
         cost = P['energy'][i]; ren = cost / d['rooms']
@@ -148,6 +184,9 @@ class Game:
         blessings, forced, charge = set(), None, s.charge
         # Temps passé dans le donjon, en salles : un coffre s'ouvre plus vite qu'un combat.
         spent = 0.0
+        # Heure d'entrée et durée d'une salle : la nuit, les monstres frappent plus fort et paient mieux.
+        way = d['travel'] / (1 + s.speed()) * P['time_factor'] * travel_factor(s.t)
+        pace = d['duration'] / (1 + s.speed()) / d['rooms'] * P['time_factor']
         for room in range(d['rooms']):
             kind = 'boss' if room == d['rooms'] - 1 else 'monster' if room == 0 else None
             if kind is None:
@@ -155,12 +194,13 @@ class Game:
                 if forced: kind, forced = forced, None
             atk_now = atk * (P['sharp'] if 'sharp' in blessings else 1)
             taken = (P['stone'] if 'stone' in blessings else 1) * (1 - s.g('armor') / 100)
-            gmul = P['fortune'] if 'fortune' in blessings else 1
+            night = is_night(s.t + way + spent * pace)
+            gmul = (P['fortune'] if 'fortune' in blessings else 1) * (P['night_gold'] if night else 1)
             spread = r.uniform(0.8, 1.2)
             wounded = min(hp, max(round(maxhp * 0.05), 1)); ko = False; ko_boss = kind == 'boss'
             if kind in ('monster', 'boss'):
                 boss = kind == 'boss'
-                fhp = d['hp'] * k * (3 if boss else 1); fdm = d['dmg'] * k * (1.5 if boss else 1)
+                fhp = d['hp'] * k * (3 if boss else 1); fdm = d['dmg'] * k * (1.5 if boss else 1) * (P['night_dmg'] if night else 1)
                 dmg = round(fdm * max(math.ceil(fhp / atk_now) - 1, 0.25) * spread * taken)
                 # Joueur attentif : coup spécial sur le boss, ou pour éviter une défaite.
                 if new and real and P['mode'] == 'active' and charge >= 1 and (boss or dmg >= hp):
@@ -169,7 +209,7 @@ class Game:
                 else:
                     if dmg >= hp: potions -= 1; hp += heal()
                     hp = min(max(hp - dmg, 1), maxhp)
-                    gold += round(d['gold'] * k * (10 if boss else 1) * spread * gmul * P['coin_mult'])
+                    gold += round(d['gold'] * kg * (10 if boss else 1) * spread * gmul * P['coin_mult'])
                     charge = min(charge + 1 / P['skill_victories'], 1)
                     if real and new:
                         s.cheer(10 if boss else 1)
@@ -182,7 +222,7 @@ class Game:
                         xp -= round(30 * P['xp_growth'] ** (level - 1)); level += 1; hp += round(20 * s.hpf)
                         maxhp = round((100 + 20 * (level - 1) + s.g('amulet')) * s.hpf); atk = round((10 + 3 * (level - 1) + s.g('weapon')) * s.atkf)
             elif kind == 'chest':
-                gold += round(d['gold'] * k * 4 * spread * gmul * P['coin_mult'])
+                gold += round(d['gold'] * kg * 4 * spread * gmul * P['coin_mult'])
                 spent -= 1 - P['chest_time']
                 if real and r.random() < min(P['chest_item'] * (1 + s.luck()), 0.95): loot.append(s.item(i + 1, rank, 0, s.luck(), r))
             elif kind == 'trap':
@@ -215,12 +255,14 @@ class Game:
         if real:
             s.hp, s.energy, s.potions = hp, energy, potions
             s.xp = 0; s.level = level; s.xp = xp
-            dur = ((d['travel'] * 2) / (1 + s.speed()) + d['duration'] / (1 + s.speed()) * spent / d['rooms']) * P['time_factor']
+            # Le retour se fait par le temps qu'il fait à la sortie du donjon.
+            back = d['travel'] / (1 + s.speed()) * P['time_factor'] * travel_factor(s.t + way + spent * pace)
+            dur = way + spent * pace + back
             if P['mode'] == 'session':
                 # Le héros emporte des provisions : il mange et boit en route, le joueur les a payées.
                 k = 3 ** (s.tier() - 1)
                 pack = (dur * 100 / P['hunger_span'] / 40 * P['ration'] + dur * 100 / P['thirst_span'] / 50 * P['water']) * k
-                s.gold = max(s.gold - pack, 0); s.st['spent'] += pack
+                s.gold = max(s.gold - pack, 0); s.st['spent'] += pack; s.st['needs'] += pack
                 s.wear(dur)
             else:
                 s.wear(dur, dungeon=True)
@@ -268,15 +310,15 @@ class Game:
         return opts[-1]
     def shopping(s):
         tier = max([i + 1 for i in range(5) if s.best[i]] or [1])
-        price = 30 * 3 ** (tier - 1)
+        price = P['potion'] * 3 ** (tier - 1)
         reserve = price * 3
-        want = (s.potions < 3 and s.gold >= price) or (not s.bedroll and s.gold >= 400)
+        want = (s.potions < 3 and s.gold >= price) or (not s.bedroll and s.gold >= P['bedroll'])
         forge = sorted([it for it in s.gear.values()], key=lambda it: it.forge_cost())
         if forge and forge[0].forge < P['forge_max'] and s.gold >= forge[0].forge_cost() + reserve: want = True
         if not want: return
         s.t += 90; s.st['travel'] += 90
-        if not s.bedroll and s.gold >= 400: s.gold -= 400; s.st['spent'] += 400; s.bedroll = True
-        while s.potions < 3 and s.gold >= price: s.gold -= price; s.potions += 1; s.st['spent'] += price
+        if not s.bedroll and s.gold >= P['bedroll']: s.gold -= P['bedroll']; s.st['spent'] += P['bedroll']; s.bedroll = True
+        while s.potions < 3 and s.gold >= price: s.gold -= price; s.potions += 1; s.st['spent'] += price; s.st['needs'] += price
         changed = True
         while changed:
             changed = False
@@ -289,6 +331,7 @@ class Game:
         for need in (s.hunger, s.thirst):
             c -= P['escape_empty'] if need <= 0 else P['escape_needy'] if need < 25 else 0
         if s.injured: c -= P['escape_injured']
+        if weather(s.t) == 'fog': c += P['fog_escape']
         c += s.g('boots') / P['boots_div'] + s.g('ring') / P['ring_div'] + s.g('helmet') / 100
         return min(max(c, 0.05), 0.97)
     def die(s):
@@ -305,9 +348,9 @@ class Game:
         if P['mode'] == 'session':
             s.cheer(15)
             while s.hunger < 60 and s.gold >= P['ration'] * k:
-                s.gold -= P['ration'] * k; s.st['spent'] += P['ration'] * k; s.hunger = min(s.hunger + 40, 100)
+                s.gold -= P['ration'] * k; s.st['spent'] += P['ration'] * k; s.st['needs'] += P['ration'] * k; s.hunger = min(s.hunger + 40, 100)
             while s.thirst < 60 and s.gold >= P['water'] * k:
-                s.gold -= P['water'] * k; s.st['spent'] += P['water'] * k; s.thirst = min(s.thirst + 50, 100)
+                s.gold -= P['water'] * k; s.st['spent'] += P['water'] * k; s.st['needs'] += P['water'] * k; s.thirst = min(s.thirst + 50, 100)
             return
         while s.hunger < 25 and s.gold >= P['ration'] * k:
             s.gold -= P['ration'] * k; s.st['spent'] += P['ration'] * k; s.hunger = min(s.hunger + 40, 100)
@@ -352,6 +395,11 @@ def play(cls, seed, threshold, limit=40 * 86400, goal=(4, 1)):
             # Le héros rentre, se repose, puis attend que le joueur repasse.
             g.rest(g.time_to_rest())
             g.rest(next_session(g.t) - g.t)
+            # Quêtes du jour : le joueur régulier en réclame quelques-unes à sa première visite.
+            if int(g.t // 86400) != getattr(g, 'quest_day', -1):
+                g.quest_day = int(g.t // 86400)
+                bonus = P['quest'] * 3 ** (g.tier() - 1) * P['quests_per_day']
+                g.gold += bonus; g.st['earned'] += bonus
             g.care(); g.camp(); g.shopping()
             o = g.pick(threshold)
             g.expedition(*o, g.r, True)

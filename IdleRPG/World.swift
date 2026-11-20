@@ -65,6 +65,10 @@ struct Dungeon: Identifiable {
     /// Les monstres, l'or et l'expérience gagnent 35 % par rang.
     static func rankScale(_ rank: Int) -> Double { pow(1.35, Double(max(rank, 1) - 1)) }
 
+    /// L'or, lui, ne gagne que 20 % par rang : sinon un rang 5 rapportait trois fois plus pour des
+    /// prix inchangés, et l'or s'entassait. Réglé avec `Outils/equilibrage.py`.
+    static func goldRankScale(_ rank: Int) -> Double { pow(1.2, Double(max(rank, 1) - 1)) }
+
     /// Rythme réel : trajets et explorations durent 12 fois les valeurs de base (le Volcan, 24 h).
     /// Réglé avec `Outils/equilibrage.py` pour qu'un joueur régulier finisse le jeu en cinq à six
     /// semaines environ. Relevé de 8,5 à 12 quand le loot est devenu plus généreux et le repos plus
@@ -303,6 +307,8 @@ struct Room: Codable {
     var provision: Provision?
     /// Pièges : nil tant que le défi n'a pas eu lieu, true s'il a été désamorcé à temps, false s'il s'est déclenché.
     var trapDisarmed: Bool?
+    /// Relique gardée par un boss, gagnée en le battant.
+    var relic: Relic?
 }
 
 struct Run: Codable {
@@ -383,7 +389,7 @@ enum Blessing: String, Codable, CaseIterable, Identifiable {
 
 /// Traits gagnés au fil des aventures. Ils donnent un petit bonus et guident les choix
 /// du héros quand le joueur n'est pas là pour décider.
-enum Trait: String, CaseIterable, Identifiable {
+enum Trait: String, Codable, CaseIterable, Identifiable {
     case brave, careful, glutton, lovable
 
     var id: String { rawValue }
@@ -405,6 +411,9 @@ enum Trait: String, CaseIterable, Identifiable {
         case .lovable: "15 encouragements : le moral baisse deux fois moins vite"
         }
     }
+
+    /// L'effet seul, sans la condition pour le gagner.
+    var effect: String { detail.components(separatedBy: " : ").last ?? detail }
 
     var symbol: String {
         switch self {
@@ -603,9 +612,9 @@ enum Supply: String, CaseIterable, Identifiable {
 
     var basePrice: Double {
         switch self {
-        case .potion: 30
-        case .ration: 20
-        case .water: 10
+        case .potion: 45
+        case .ration: 25
+        case .water: 12
         case .scroll: 60
         case .bedroll: 400
         }

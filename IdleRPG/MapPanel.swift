@@ -21,6 +21,12 @@ struct MapPanel: View {
         VStack(alignment: .leading, spacing: 10) {
             switch game.activity {
             case .resting:
+                if let outcome = game.visitOutcome {
+                    VisitOutcomeCard(outcome: outcome) { game.visitOutcome = nil }
+                }
+                if let visit = game.visitor {
+                    VisitorCard(game: game, visit: visit)
+                }
                 CareCard(game: game)
                 RoamRow(game: game)
                 if !game.ownedCompanions.isEmpty {
@@ -240,6 +246,116 @@ private struct CareCard: View {
     private var cheerLabel: String {
         let left = game.cheerCooldown / game.timeScale
         return left > 0 ? "Encourager · \(left.shortDuration)" : "Encourager"
+    }
+}
+
+/// Un visiteur au feu de camp : qui il est, et ce qu'on peut en faire. Une seule réponse, puis il repart.
+private struct VisitorCard: View {
+    let game: GameState
+    let visit: CampVisit
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 12) {
+                Image(systemName: visit.kind.symbol)
+                    .font(.title2.weight(.semibold))
+                    .foregroundStyle(.yellow)
+                    .frame(width: 54, height: 54)
+                    .background(Color.black.opacity(0.22), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                VStack(alignment: .leading, spacing: 3) {
+                    HStack(alignment: .firstTextBaseline) {
+                        Text(visit.kind.name)
+                            .font(.headline.weight(.heavy))
+                        Spacer(minLength: 4)
+                        Label(leaves, systemImage: "hourglass")
+                            .font(.caption2.weight(.bold))
+                            .monospacedDigit()
+                            .foregroundStyle(.secondary)
+                            .accessibilityLabel("Repart dans \(leaves)")
+                    }
+                    Text(visit.kind.intro)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            ForEach(game.visitOptions(visit)) { option in
+                HStack(spacing: 10) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(option.title)
+                            .font(.subheadline.weight(.bold))
+                        Text(option.detail)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    Spacer(minLength: 4)
+                    if let price = option.price {
+                        PriceButton(price: price, enabled: option.blocker == nil, blocker: option.blocker) {
+                            answer(option)
+                        }
+                        .accessibilityLabel("\(option.title) pour \(price.short) or")
+                    } else {
+                        Button {
+                            answer(option)
+                        } label: {
+                            Text(option.blocker ?? "Choisir")
+                                .font(option.blocker == nil ? .subheadline.weight(.heavy) : .caption.weight(.bold))
+                                .frame(minWidth: 64)
+                                .padding(.vertical, 4)
+                        }
+                        .actionGlass(option.blocker == nil, tint: .orange)
+                        .disabled(option.blocker != nil)
+                        .accessibilityLabel(option.blocker.map { "\(option.title), \($0)" } ?? option.title)
+                    }
+                }
+                .padding(10)
+                .background(Color.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+            }
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .glassEffect(.regular.tint(.yellow.opacity(0.12)), in: .rect(cornerRadius: 22))
+    }
+
+    /// Temps réel avant son départ.
+    private var leaves: String {
+        (max(visit.end.timeIntervalSince(game.gameDate(at: game.uiClock)), 0) / game.timeScale).shortDuration
+    }
+
+    private func answer(_ option: VisitOption) {
+        game.answerVisit(visit, option: option.id)
+        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+    }
+}
+
+/// Ce qu'a donné la rencontre : reste affiché jusqu'à ce qu'on le referme.
+private struct VisitOutcomeCard: View {
+    let outcome: VisitOutcome
+    let dismiss: () -> Void
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: outcome.symbol)
+                .font(.title3.weight(.semibold))
+                .foregroundStyle(outcome.good ? .green : .orange)
+                .frame(width: 30)
+            Text(outcome.text)
+                .font(.footnote)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .fixedSize(horizontal: false, vertical: true)
+            Button(action: dismiss) {
+                Image(systemName: "xmark")
+                    .font(.caption.weight(.bold))
+                    .foregroundStyle(.secondary)
+                    .frame(width: 28, height: 28)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Fermer")
+        }
+        .padding(14)
+        .glassEffect(.regular, in: .rect(cornerRadius: 22))
     }
 }
 

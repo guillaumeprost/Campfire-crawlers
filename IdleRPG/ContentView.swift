@@ -10,6 +10,7 @@ struct ContentView: View {
     @State private var showOptions = false
     @State private var showExploits = false
     @State private var showStats = false
+    @State private var showAmbient = false
     // La section d'exploits choisie vit ici, pour survivre aux rafraîchissements fréquents du jeu.
     @State private var exploitPart: ExploitsPanel.Part = .quests
     @Namespace private var sectionSpace
@@ -212,7 +213,7 @@ struct ContentView: View {
             Text("Votre or, votre niveau, vos donjons et votre équipement seront perdus.")
         }
         .fullScreenCover(isPresented: Binding(
-            get: { game.heroClass == nil || pickingHero },
+            get: { game.heroClass == nil || pickingHero || game.pendingLegacy != nil },
             set: { pickingHero = $0 }
         )) {
             HeroPicker(game: game) { pickingHero = false }
@@ -327,6 +328,54 @@ struct ContentView: View {
     }
 
     private var header: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            headerRow
+                .frame(maxWidth: .infinity)
+            ambientChip
+            // En paysage une feuille couvrirait tout l'écran : le détail s'ouvre en carte sous la pastille.
+            if landscape && showAmbient {
+                AmbientCard(ambient: game.ambient, shelteredRest: game.has(.ember), compact: true) {
+                    withAnimation(.snappy) { showAmbient = false }
+                }
+                .frame(width: 330)
+                .glassEffect(.regular, in: .rect(cornerRadius: 22))
+                .transition(.opacity.combined(with: .scale(scale: 0.9, anchor: .topLeading)))
+            }
+        }
+        .onChange(of: landscape) { showAmbient = false }
+    }
+
+    /// L'heure et le temps qu'il fait, sous l'en-tête : un toucher détaille ce que ça change.
+    private var ambientChip: some View {
+        let ambient = game.ambient
+        return Button {
+            withAnimation(.snappy) { showAmbient.toggle() }
+        } label: {
+            HStack(spacing: 6) {
+                Image(systemName: ambient.symbol)
+                    .symbolRenderingMode(.multicolor)
+                    .contentTransition(.symbolEffect(.replace))
+                Text(ambient.title)
+            }
+            .font(.caption.weight(.heavy))
+            .foregroundStyle(.white)
+            .padding(.horizontal, 11)
+            .padding(.vertical, 6)
+            .glassEffect(.regular.interactive(), in: .capsule)
+            .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(ambient.title)
+        .accessibilityHint("Voir les effets de l'heure et de la météo")
+        // Une feuille, comme la fiche du héros : un popover ferait disparaître le panneau du bas.
+        .sheet(isPresented: Binding(get: { showAmbient && !landscape }, set: { showAmbient = $0 })) {
+            AmbientCard(ambient: game.ambient, shelteredRest: game.has(.ember)) { showAmbient = false }
+                .presentationDetents([.height(300), .medium])
+                .preferredColorScheme(.dark)
+        }
+    }
+
+    private var headerRow: some View {
         GlassEffectContainer(spacing: 10) {
             HStack(alignment: .center, spacing: 8) {
                 HStack(spacing: 6) {
@@ -377,6 +426,8 @@ struct ContentView: View {
                     VStack(alignment: .trailing, spacing: 4) {
                         Text("\(game.name) · Niv. \(game.level)")
                             .font(.footnote.weight(.heavy))
+                            .lineLimit(1)
+                            .fixedSize()
                         ProgressView(value: min(game.xp / game.xpNeeded, 1))
                             .tint(.cyan)
                             .frame(width: 84)
@@ -516,7 +567,8 @@ private struct VitalsCard: View {
                 // paysage, ou beaucoup de stats une fois équipé) au lieu de déborder du panneau.
                 StatFlow(spacing: 10, lineSpacing: 4) {
                     stat("Attaque \(game.attack.short)")
-                    if game.speedBonus > 0 { stat("Vitesse +\(Int(game.speedBonus * 100))\u{00A0}%") }
+                    // Une relique peut ralentir le héros : la vitesse s'affiche aussi quand elle est négative.
+                    if game.speedBonus != 0 { stat("Vitesse \(Self.signed(game.speedBonus))") }
                     if game.luck > 0 { stat("Chance +\(Int(game.luck * 100))\u{00A0}%") }
                     if game.defense > 0 { stat("Défense \(Int((game.defense * 100).rounded()))\u{00A0}%") }
                     stat("Fuite \(Int((game.escapeChance() * 100).rounded()))\u{00A0}%")
@@ -543,6 +595,12 @@ private struct VitalsCard: View {
 
     private func stat(_ text: String) -> some View {
         Text(text).lineLimit(1).minimumScaleFactor(0.8)
+    }
+
+    /// « +25 % », « -10 % ».
+    static func signed(_ fraction: Double) -> String {
+        let percent = Int((fraction * 100).rounded())
+        return "\(percent >= 0 ? "+" : "")\(percent)\u{00A0}%"
     }
 
     private var moodSymbol: String {
@@ -739,7 +797,7 @@ private struct CharacterSheet: View {
                         statRow("Attaque", game.attack.short, "bolt.fill", .orange)
                         statRow("PV max", game.maxHP.short, "heart.fill", .red)
                         statRow("Énergie max", Int(GameState.maxEnergy).description, "bolt.heart.fill", .yellow)
-                        statRow("Vitesse", "+\(Int(game.speedBonus * 100))\u{00A0}%", "hare.fill", .green)
+                        statRow("Vitesse", VitalsCard.signed(game.speedBonus), "hare.fill", .green)
                         statRow("Chance", "+\(Int(game.luck * 100))\u{00A0}%", "clover.fill", .mint)
                         statRow("Fuite", "\(Int((game.escapeChance() * 100).rounded()))\u{00A0}%", "figure.run", .cyan)
                         if let companion = game.activeCompanion {
@@ -770,10 +828,19 @@ private struct CharacterSheet: View {
                                     Image(systemName: trait.symbol).foregroundStyle(.pink).frame(width: 22)
                                     VStack(alignment: .leading, spacing: 1) {
                                         Text(trait.name).font(.subheadline.weight(.semibold))
-                                        Text(trait.detail).font(.caption2).foregroundStyle(.secondary)
+                                        Text(game.inheritedTraits.contains(trait) ? "Hérité : \(trait.effect)" : trait.detail)
+                                            .font(.caption2).foregroundStyle(.secondary)
                                     }
                                     Spacer(minLength: 0)
                                 }
+                            }
+                        }
+                    }
+
+                    if !game.relics.isEmpty {
+                        card("Reliques") {
+                            ForEach(game.relics) { relic in
+                                RelicLine(relic: relic)
                             }
                         }
                     }
@@ -827,25 +894,93 @@ private struct HeroPicker: View {
     @State private var abandonFor: HeroClass?
 
     var body: some View {
+        if let offer = game.pendingLegacy {
+            legacyStep(offer)
+        } else {
+            heroStep
+        }
+    }
+
+    /// Avant de choisir un successeur : ce que le héros tombé lui laisse. Un seul legs.
+    private func legacyStep(_ offer: PendingLegacy) -> some View {
+        // Tout défile d'un bloc : en paysage, la tombe et les legs ne tiennent pas sur une hauteur d'écran.
+        ScrollView {
+        VStack(spacing: 12) {
+            Tombstone(width: 104)
+                .padding(.top, 18)
+            if let grave = game.lastGrave {
+                Text(grave.name)
+                    .font(.title3.weight(.heavy))
+                Text("\(grave.heroClass.name) · \(grave.summary)")
+                    .font(.footnote.weight(.semibold))
+                    .foregroundStyle(.secondary)
+            }
+            Text(game.lastFate)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+            Text("Que laisse-t-il derrière lui ?")
+                .font(.title2.weight(.heavy))
+                .padding(.top, 4)
+            Text("Un seul legs passe au successeur. Le reste repose avec lui.")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+                VStack(spacing: 10) {
+                    ForEach(offer.options) { legacy in
+                        Button {
+                            game.chooseLegacy(legacy)
+                            UINotificationFeedbackGenerator().notificationOccurred(.success)
+                        } label: {
+                            HStack(spacing: 14) {
+                                Image(systemName: legacy.symbol)
+                                    .font(.title2.weight(.semibold))
+                                    .foregroundStyle(.yellow)
+                                    .frame(width: 44, height: 44)
+                                    .background(Color.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                                VStack(alignment: .leading, spacing: 3) {
+                                    Text(legacy.title)
+                                        .font(.headline.weight(.heavy))
+                                    Text(legacy.detail)
+                                        .font(.footnote)
+                                        .foregroundStyle(.secondary)
+                                        .multilineTextAlignment(.leading)
+                                        .fixedSize(horizontal: false, vertical: true)
+                                }
+                                Spacer(minLength: 0)
+                                Image(systemName: "chevron.right")
+                                    .font(.footnote.weight(.bold))
+                                    .foregroundStyle(.secondary)
+                            }
+                            .padding(12)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .glassEffect(.regular, in: .rect(cornerRadius: 22))
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(.bottom, 16)
+        }
+        .padding(.horizontal, 20)
+        .frame(maxWidth: 560)
+        .frame(maxWidth: .infinity)
+        }
+        .scrollIndicators(.hidden)
+        .scrollBounceBehavior(.basedOnSize)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background { PlaceBackdrop(image: "scene_camp") }
+        .preferredColorScheme(.dark)
+    }
+
+    private var heroStep: some View {
+        // Défilant : en paysage, les trois héros dépassent la hauteur de l'écran.
+        ScrollView {
         VStack(spacing: 14) {
             if game.heroClass == nil && game.generation > 1 {
                 // Le héros est mort : sa tombe, son épitaphe, et le choix du successeur.
                 VStack(spacing: 10) {
-                    ZStack {
-                        UnevenRoundedRectangle(topLeadingRadius: 42, bottomLeadingRadius: 6,
-                                               bottomTrailingRadius: 6, topTrailingRadius: 42)
-                            .fill(Color(white: 0.38))
-                            .overlay(
-                                UnevenRoundedRectangle(topLeadingRadius: 42, bottomLeadingRadius: 6,
-                                                       bottomTrailingRadius: 6, topTrailingRadius: 42)
-                                    .stroke(.white.opacity(0.15), lineWidth: 2))
-                            .frame(width: 118, height: 128)
-                        Text("R.I.P")
-                            .font(.system(size: 22, weight: .heavy, design: .serif))
-                            .foregroundStyle(.white.opacity(0.85))
-                            .offset(y: -14)
-                    }
-                    .padding(.top, 18)
+                    Tombstone(width: 118)
+                        .padding(.top, 18)
                     Text(game.lastFate)
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
@@ -907,16 +1042,20 @@ private struct HeroPicker: View {
                 .buttonStyle(.plain)
             }
 
-            Spacer(minLength: 0)
-
             if game.heroClass != nil {
                 Button("Fermer", action: close)
                     .font(.headline)
                     .buttonStyle(.glass)
-                    .padding(.bottom, 12)
+                    .padding(.top, 6)
             }
         }
         .padding(.horizontal, 20)
+        .padding(.bottom, 16)
+        .frame(maxWidth: 560)
+        .frame(maxWidth: .infinity)
+        }
+        .scrollIndicators(.hidden)
+        .scrollBounceBehavior(.basedOnSize)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background { PlaceBackdrop(image: "scene_camp") }
         .preferredColorScheme(.dark)
@@ -930,7 +1069,88 @@ private struct HeroPicker: View {
             }
             Button("Garder \(game.name)", role: .cancel) {}
         } message: { _ in
-            Text("\(game.name) sera abandonné à son sort : c'est une mort définitive. Le nouveau héros repart du niveau 1 et hérite du camp et d'un quart de l'or.")
+            Text("\(game.name) sera abandonné à son sort : c'est une mort définitive. Le nouveau héros repart du niveau 1, hérite du camp, d'un quart de l'or et d'un legs à choisir.")
+        }
+    }
+}
+
+/// Une relique : son atout en vert, sa contrepartie en orange.
+struct RelicLine: View {
+    let relic: Relic
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: relic.symbol).foregroundStyle(.yellow).frame(width: 22)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(relic.name).font(.subheadline.weight(.semibold))
+                Text(relic.boon).font(.caption2.weight(.bold)).foregroundStyle(.green)
+                if let bane = relic.bane {
+                    Text(bane).font(.caption2.weight(.bold)).foregroundStyle(.orange)
+                }
+            }
+            Spacer(minLength: 0)
+        }
+        .accessibilityElement(children: .combine)
+    }
+}
+
+/// Détail de l'heure et de la météo : ce qu'elles changent pour le héros.
+private struct AmbientCard: View {
+    let ambient: Ambient
+    /// La braise éternelle protège le feu de la pluie.
+    let shelteredRest: Bool
+    /// Carte posée sur la scène (paysage) plutôt que feuille : elle se serre autour de son contenu.
+    var compact = false
+    let close: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Label(ambient.title, systemImage: ambient.symbol)
+                    .symbolRenderingMode(.multicolor)
+                    .font((compact ? Font.headline : .title3).weight(.heavy))
+                Spacer()
+                if compact {
+                    Button(action: close) {
+                        Image(systemName: "xmark")
+                            .font(.footnote.weight(.bold))
+                            .frame(width: 30, height: 30)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Fermer")
+                } else {
+                    Button("Fermer", action: close)
+                        .buttonStyle(.glass)
+                }
+            }
+            if ambient.effects.isEmpty {
+                Text("Rien à signaler : une belle journée pour partir.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
+            ForEach(ambient.effects, id: \.self) { effect in
+                let voided = shelteredRest && effect.hasPrefix("Le feu faiblit")
+                Label(voided ? "La braise éternelle protège le feu" : effect, systemImage: "circle.fill")
+                    .font(compact ? .footnote : .subheadline)
+                    .labelStyle(BulletLabel())
+            }
+            Text("Le temps change toutes les trois heures. Sous terre, seule la nuit compte.")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+                .padding(.top, 2)
+        }
+        .padding(compact ? 14 : 22)
+        .frame(maxWidth: .infinity, maxHeight: compact ? nil : .infinity, alignment: .topLeading)
+        .foregroundStyle(.white)
+    }
+}
+
+private struct BulletLabel: LabelStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            configuration.icon.font(.system(size: 5)).foregroundStyle(.secondary)
+            configuration.title.fixedSize(horizontal: false, vertical: true)
         }
     }
 }

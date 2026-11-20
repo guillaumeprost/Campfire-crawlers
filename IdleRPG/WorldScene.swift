@@ -104,6 +104,11 @@ final class WorldScene: SKScene {
     private let props = SKNode()
     /// Effets qui survivent au changement de salle : monstre qui tombe, pièces, textes.
     private let effects = SKNode()
+    /// Pluie, brume, éclairs et voile de nuit, par-dessus les personnages.
+    private let weatherLayer = SKNode()
+    private var weatherKey: Weather?
+    /// Position du feu de camp, pour y placer le visiteur.
+    private var campFire = CGPoint.zero
     /// Le marchand, quand la scène du marché est affichée : les achats partent de lui.
     private weak var merchant: SKSpriteNode?
     /// La serveuse, quand la taverne est affichée : les commandes partent d'elle.
@@ -285,6 +290,8 @@ final class WorldScene: SKScene {
 
         effects.zPosition = 8
         addChild(effects)
+        weatherLayer.zPosition = 6
+        addChild(weatherLayer)
 
         buildHPBar()
 
@@ -348,9 +355,13 @@ final class WorldScene: SKScene {
 
     /// Le camp s'éclaire le jour, de 7 h à 19 h à l'heure du téléphone.
     static var isDaytime: Bool {
-        let hour = Calendar.current.component(.hour, from: Date())
-        return (7..<19).contains(hour)
+        if let ambient = shownAmbient { return !ambient.night }
+        return !Ambient.isNight(Date())
     }
+
+    /// L'heure et le temps du jeu, recopiés à chaque image : en mode test les jours défilent plus vite
+    /// que l'horloge du téléphone, et le décor doit suivre le jeu.
+    private(set) static var shownAmbient: Ambient?
 
     /// Image du camp, du jour ou de la nuit. Le paysage a sa propre version de jour, plus brumeuse.
     static var campImage: String { isDaytime ? "scene_camp_brume" : "scene_camp" }
@@ -475,13 +486,21 @@ final class WorldScene: SKScene {
         let dt = lastUpdate == 0 ? 0 : min(currentTime - lastUpdate, 0.1)
         lastUpdate = currentTime
         game.tick()
+        let ambient = game.ambient
+        Self.shownAmbient = ambient
 
         guard size.width > 0, size.height > 0 else { return }
         let key = Self.key(for: game.activity) + "|" + game.heroLook.rawValue + (game.injured ? "|blessé" : "")
             + (Self.isDaytime ? "|jour" : "|nuit") + (sleepsAtCamp ? "|dort" : "")
+            + "|" + (game.visitor?.id ?? "")
         if key != modeKey {
             modeKey = key
+            weatherKey = ambient.weather
             rebuild()
+        } else if ambient.weather != weatherKey {
+            // Le temps tourne : seule la météo se redessine, sans interrompre ce qui se joue.
+            weatherKey = ambient.weather
+            buildWeather()
         }
         animate(dt)
     }
@@ -495,6 +514,175 @@ final class WorldScene: SKScene {
         case .exploring(let run): "run:\(run.dungeon):\(run.roomIndex)"
         case .roaming(let roam): "roam:\(roam.start)"
         }
+    }
+
+    // MARK: - Météo et visiteurs
+
+    /// Le héros est-il dehors ? Sous terre et à la taverne, il ne pleut pas.
+    private var isOutdoors: Bool {
+        switch game.activity {
+        case .resting, .shopping, .traveling, .roaming: true
+        case .tavern: UIImage(named: "scene_taverne") == nil   // décor provisoire : la place du village
+        case .exploring(let run): Dungeon.all[run.dungeon].style == .forest
+        }
+    }
+
+    private static let dropTexture: SKTexture = {
+        let size = CGSize(width: 2, height: 14)
+        let image = UIGraphicsImageRenderer(size: size).image { context in
+            UIColor(white: 1, alpha: 0.9).setFill()
+            context.fill(CGRect(origin: .zero, size: size))
+        }
+        let texture = SKTexture(image: image)
+        texture.filteringMode = .nearest
+        return texture
+    }()
+
+    /// Pluie, brume, éclairs et pénombre de la nuit, par-dessus le décor quand le héros est dehors.
+    private func buildWeather() {
+        weatherLayer.removeAllChildren()
+        weatherLayer.removeAllActions()
+        guard isOutdoors else { return }
+        let ambient = game.ambient
+        let full = CGRect(x: 0, y: 0, width: size.width, height: size.height)
+
+        // La nuit : un voile bleu sombre. Le camp a déjà sa propre peinture de nuit.
+        var isCamp = false
+        if case .resting = game.activity { isCamp = true }
+        if ambient.night, !isCamp {
+            let dusk = SKSpriteNode(color: UIColor(red: 0.03, green: 0.06, blue: 0.22, alpha: 1), size: full.size)
+            dusk.anchorPoint = .zero
+            dusk.alpha = 0.42
+            dusk.zPosition = -1
+            weatherLayer.addChild(dusk)
+        }
+
+        switch ambient.weather {
+        case .clear:
+            break
+        case .fog:
+            // Deux nappes pâles qui dérivent lentement en sens contraire.
+            for (index, alpha) in [0.20, 0.14].enumerated() {
+                let veil = SKSpriteNode(texture: Self.glowTexture,
+                                        size: CGSize(width: size.width * 2.2, height: size.height * 0.75))
+                veil.color = UIColor(white: 0.86, alpha: 1)
+                veil.colorBlendFactor = 1
+                veil.alpha = alpha
+                veil.position = CGPoint(x: size.width * (index == 0 ? 0.3 : 0.8), y: feetY + size.height * 0.16)
+                let drift = size.width * 0.25 * (index == 0 ? 1 : -1)
+                veil.run(.repeatForever(.sequence([.moveBy(x: drift, y: 0, duration: 14),
+                                                   .moveBy(x: -drift, y: 0, duration: 14)])))
+                weatherLayer.addChild(veil)
+            }
+            let haze = SKSpriteNode(color: UIColor(white: 0.8, alpha: 1), size: full.size)
+            haze.anchorPoint = .zero
+            haze.alpha = 0.12
+            weatherLayer.addChild(haze)
+        case .rain, .storm:
+            let storm = ambient.weather == .storm
+            // Le ciel se couvre.
+            let gloom = SKSpriteNode(color: UIColor(red: 0.10, green: 0.14, blue: 0.22, alpha: 1), size: full.size)
+            gloom.anchorPoint = .zero
+            gloom.alpha = storm ? 0.34 : 0.2
+            gloom.zPosition = -0.5
+            weatherLayer.addChild(gloom)
+
+            let rain = SKEmitterNode()
+            rain.particleTexture = Self.dropTexture
+            rain.particleBirthRate = storm ? 420 : 190
+            rain.particleLifetime = 1.1
+            rain.particleSpeed = storm ? 1_050 : 780
+            rain.particleSpeedRange = 160
+            rain.emissionAngle = -.pi / 2 - (storm ? 0.30 : 0.14)
+            rain.particleRotation = storm ? -0.30 : -0.14
+            rain.particleAlpha = storm ? 0.5 : 0.36
+            rain.particleAlphaRange = 0.2
+            rain.particleScale = 0.9
+            rain.particleScaleRange = 0.5
+            rain.particleColor = UIColor(red: 0.78, green: 0.88, blue: 1, alpha: 1)
+            rain.particleColorBlendFactor = 1
+            rain.position = CGPoint(x: size.width * 0.6, y: size.height + 20)
+            rain.particlePositionRange = CGVector(dx: size.width * 1.6, dy: 0)
+            rain.advanceSimulationTime(1.5)
+            weatherLayer.addChild(rain)
+
+            if storm {
+                // Un éclair de temps en temps : la scène blanchit un instant.
+                let bolt = SKSpriteNode(color: .white, size: full.size)
+                bolt.anchorPoint = .zero
+                bolt.alpha = 0
+                bolt.zPosition = 1
+                weatherLayer.addChild(bolt)
+                bolt.run(.repeatForever(.sequence([
+                    .wait(forDuration: 7, withRange: 8),
+                    .fadeAlpha(to: 0.55, duration: 0.04), .fadeAlpha(to: 0.1, duration: 0.08),
+                    .fadeAlpha(to: 0.4, duration: 0.04), .fadeOut(withDuration: 0.35),
+                ])))
+            }
+        }
+    }
+
+    /// Le visiteur du camp se réchauffe derrière le feu, une bulle au-dessus de la tête.
+    /// L'animal égaré prend l'apparence du compagnon qu'il peut devenir.
+    private func buildVisitor() {
+        guard case .resting = game.activity, let visit = game.visitor else { return }
+        // Juste derrière le feu, un peu à droite : il s'y réchauffe sans cacher les flammes.
+        let spot = CGPoint(x: min(campFire.x + 32 * zoom, playWidth - 50), y: feetY + 6)
+        var top = spot.y + 70 * zoom
+        var figure: SKSpriteNode?
+        switch visit.kind {
+        case .merchant:
+            let merchant = npc("merchant_idle_1")
+            merchant.xScale = -1
+            merchant.run(.repeatForever(.sequence([
+                .repeat(.animate(with: (1...4).map { Self.texture("merchant_idle_\($0)") }, timePerFrame: 0.45), count: 3),
+                .animate(with: (1...4).map { Self.texture("merchant_wave_\($0)") }, timePerFrame: 0.22),
+            ])))
+            figure = merchant
+        case .wounded, .gambler, .pilgrim:
+            // Sprites PixelLab installés par `Art/import_visitors.py`, dessinés tournés vers le héros.
+            let name = "npc_\(visit.kind.rawValue)_idle"
+            guard UIImage(named: "\(name)_1") != nil else { break }
+            let visitor = npc("\(name)_1")
+            visitor.run(.repeatForever(.animate(with: Self.npcFrames(name, 4), timePerFrame: 0.3)))
+            figure = visitor
+        case .stray:
+            guard let beast = game.strayCompanion(for: visit), UIImage(named: beast.frames("sit")[0]) != nil else { break }
+            let frames = beast.frames("sit").map { Self.texture($0) }
+            let animal = SKSpriteNode(texture: frames[0])
+            // Même taille que le compagnon qui suit le héros ; ses images regardent déjà vers la gauche.
+            let base = Self.texture(beast.frames("walk")[0]).size()
+            let scale = Self.heroScale * zoom * 0.72
+            animal.size = CGSize(width: base.width * scale, height: base.height * scale)
+            animal.anchorPoint = CGPoint(x: 0.5, y: 0)
+            animal.run(.repeatForever(.animate(with: frames, timePerFrame: 0.35)))
+            figure = animal
+        }
+        if let figure {
+            figure.position = spot
+            figure.zPosition = 1.5
+            props.addChild(figure)
+            // Le canevas des animaux garde du vide au-dessus d'eux : la bulle descend d'autant.
+            top = spot.y + figure.size.height * (visit.kind == .stray ? 0.72 : 1) + 16
+        }
+        // Une bulle qui sautille : quelqu'un attend une réponse.
+        let bubble = SKShapeNode(circleOfRadius: 17)
+        bubble.fillColor = UIColor(white: 0.08, alpha: 0.85)
+        bubble.strokeColor = UIColor(red: 1, green: 0.82, blue: 0.3, alpha: 1)
+        bubble.lineWidth = 2
+        bubble.position = CGPoint(x: spot.x, y: top)
+        bubble.zPosition = 5
+        let configuration = UIImage.SymbolConfiguration(pointSize: 18, weight: .bold)
+        if let symbol = UIImage(systemName: visit.kind.symbol, withConfiguration: configuration)?
+            .withTintColor(UIColor(red: 1, green: 0.85, blue: 0.35, alpha: 1), renderingMode: .alwaysOriginal) {
+            // Redessiné dans une image : passé tel quel, un symbole perd sa couleur dans SpriteKit.
+            let image = UIGraphicsImageRenderer(size: symbol.size).image { _ in symbol.draw(at: .zero) }
+            let icon = SKSpriteNode(texture: SKTexture(image: image))
+            icon.size = CGSize(width: image.size.width * 20 / max(image.size.height, 1), height: 20)
+            bubble.addChild(icon)
+        }
+        bubble.run(.repeatForever(.sequence([.moveBy(x: 0, y: 6, duration: 0.5), .moveBy(x: 0, y: -6, duration: 0.5)])))
+        props.addChild(bubble)
     }
 
     private func rebuild() {
@@ -596,6 +784,9 @@ final class WorldScene: SKScene {
             bob(fast: false)
         }
 
+        buildWeather()
+        buildVisitor()
+
         endSpecial()
         let frame = Self.texture(game.heroLook.frames("walk")[0]).size()
         let scale = Self.heroScale * zoom
@@ -670,6 +861,7 @@ final class WorldScene: SKScene {
     /// `fire` : pied du feu dans la scène ; `fireflies` : centre de l'essaim, près du grand arbre.
     private func buildCamp(fire spot: (CGFloat, CGFloat), fireflies swarm: (CGFloat, CGFloat)) {
         let firePos = scenePoint(spot.0, spot.1)
+        campFire = firePos
 
         // Feu en pixel art (PixelLab, `Art/import_pixellab.py`) : des bûches qui flambent,
         // posées dans le cercle de pierres peint.
@@ -1237,6 +1429,13 @@ final class WorldScene: SKScene {
             floatText(companion.name, color: .systemYellow, size: 16,
                       over: heroPosition, height: hero.size.height + 50)
             UINotificationFeedbackGenerator().notificationOccurred(.success)
+        case .relicFound(let relic):
+            react(relic.symbol, color: .systemYellow)
+            showBanner(relic.name)
+            burst("fx_levelup", height: 90, at: CGPoint(x: heroPosition.x, y: heroPosition.y - 4))
+            successHaptic.notificationOccurred(.success)
+        case let .visited(symbol, good):
+            react(symbol, color: good ? .systemGreen : .systemOrange)
         case .trapTriggered:
             UIImpactFeedbackGenerator(style: .rigid).impactOccurred()
         case .trapDisarmed:
@@ -1399,7 +1598,7 @@ final class WorldScene: SKScene {
         case .equipped: detail = "\(title) · équipé"
         case .stored: detail = title
         case .carried: detail = "\(title) · dans la sacoche"
-        case .sold: detail = "Sac plein · vendu \(item.sellValue.short) or"
+        case .sold: detail = "Sac plein · vendu \(item.resaleValue.short) or"
         }
         let caption = SKLabelNode()
         caption.attributedText = Self.outlined(detail, size: 15, color: color)

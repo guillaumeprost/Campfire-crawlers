@@ -213,7 +213,7 @@ private struct ItemDetailSheet: View {
                         HStack(spacing: 5) {
                             Text("Vendre")
                             CoinIcon(size: 14)
-                            Text(item.sellValue.short)
+                            Text(item.resaleValue.short)
                         }
                         .font(.headline)
                         .frame(maxWidth: .infinity)

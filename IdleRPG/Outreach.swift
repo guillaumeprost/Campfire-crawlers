@@ -22,7 +22,7 @@ struct OutreachPlan {
 
 /// Programme les notifications et tient à jour l'activité en direct.
 enum Outreach {
-    private static let ids = ["hero.landing", "hero.rested", "hero.hungry", "hero.thirsty", "hero.starving", "hero.dying", "hero.fork", "hero.bored"]
+    private static let ids = ["hero.landing", "hero.rested", "hero.hungry", "hero.thirsty", "hero.starving", "hero.dying", "hero.fork", "hero.bored", "hero.visitor"]
 
     /// Portrait du héros, joint aux notifications.
     static var portrait = "hero_mage_portrait"

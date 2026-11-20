@@ -33,6 +33,10 @@ enum GameEvent {
     case trapTriggered
     /// Piège désamorcé à temps : aucun dégât.
     case trapDisarmed
+    /// Une relique rejoint le héros : boss vaincu, marchand ambulant ou héritage.
+    case relicFound(Relic)
+    /// Le joueur a répondu à un visiteur du camp.
+    case visited(symbol: String, good: Bool)
 }
 
 /// Défi de désamorçage : un curseur balaie une barre, le joueur tape quand il passe sur la zone verte.
@@ -144,6 +148,29 @@ final class GameState {
     private(set) var activeCompanion: CompanionKind?
     /// Compagnons déjà rencontrés et apprivoisés (stockés par `rawValue`).
     private(set) var unlockedCompanions: Set<String> = []
+    /// Reliques du héros : il les garde jusqu'à sa mort.
+    private(set) var relics: [Relic] = []
+    /// Traits reçus en héritage d'un héros tombé.
+    private(set) var inheritedTraits: [Trait] = []
+    /// Le cimetière de la lignée, du plus ancien au plus récent.
+    private(set) var graves: [Grave] = []
+    /// Legs du dernier héros tombé, tant que le joueur n'a pas choisi.
+    private(set) var pendingLegacy: PendingLegacy?
+    /// Visites du camp auxquelles le joueur a déjà répondu.
+    private(set) var answeredVisits: [String] = []
+    /// Ce qu'a donné la dernière rencontre au camp. Transitoire : jamais sauvegardé.
+    var visitOutcome: VisitOutcome?
+    /// Départ du héros sur l'horloge du jeu, et combats de la lignée à ce moment-là.
+    @ObservationIgnored private var heroBorn: TimeInterval?
+    @ObservationIgnored private var fightsAtBirth = 0
+    /// Repère qui relie l'horloge du jeu à la date : il donne l'heure et la météo de n'importe quel instant.
+    @ObservationIgnored private var anchorDate = Date()
+    @ObservationIgnored private var anchorClock: TimeInterval = 0
+    #if DEBUG
+    @ObservationIgnored private var debugVisitor: VisitorKind?
+    /// Partagé avec la copie qui prévoit la suite, pour qu'elle voie le même temps figé.
+    private static var debugAmbient: Ambient?
+    #endif
 
     // Monde
     private(set) var activity: Activity = .resting
@@ -205,6 +232,31 @@ final class GameState {
         if defaults.bool(forKey: "debugHeal") { hp = maxHP; energy = Self.maxEnergy; injured = false }
         // Tests : `-debugSkill YES` recharge le coup spécial et le déclenche à chaque combat.
         debugAutoSkill = defaults.bool(forKey: "debugSkill")
+        // Tests : `-debugLevel 40` monte le héros à ce niveau, `-debugUnlock YES` ouvre tous les donjons
+        // (rang 5 partout sauf le dernier), `-debugFeats YES` donne les quatre traits de caractère.
+        let wanted = defaults.integer(forKey: "debugLevel")
+        if wanted > level { level = wanted; hp = maxHP }
+        if defaults.bool(forKey: "debugUnlock") {
+            for index in 0..<Dungeon.all.count - 1 {
+                bestRanks[index] = max(bestRanks[index], Dungeon.unlockRank)
+                clears[index] = max(clears[index], 1)
+            }
+        }
+        if defaults.bool(forKey: "debugFeats") { (bossKills, flees, meals, cares) = (5, 3, 10, 15) }
+        // Tests : `-debugVisitor merchant` fait venir ce visiteur au camp, `-debugWeather storm`
+        // et `-debugNight YES|NO` figent le temps, `-debugRelic moonCharm` donne une relique.
+        debugVisitor = defaults.string(forKey: "debugVisitor").flatMap(VisitorKind.init(rawValue:))
+        Self.debugAmbient = nil
+        if defaults.string(forKey: "debugWeather") != nil || defaults.object(forKey: "debugNight") != nil {
+            let real = Ambient.at(Date())
+            Self.debugAmbient = Ambient(
+                night: defaults.object(forKey: "debugNight") != nil ? defaults.bool(forKey: "debugNight") : real.night,
+                weather: defaults.string(forKey: "debugWeather").flatMap(Weather.init(rawValue:)) ?? real.weather)
+        }
+        if let relic = defaults.string(forKey: "debugRelic").flatMap(Relic.init(rawValue:)), !relics.contains(relic) {
+            relics.append(relic)
+            hp = min(hp, maxHP)
+        }
         // Tests : `-debugGo 0` envoie le héros dans la Cave au lancement, `-debugGo shop` à la boutique.
         if let hero = defaults.string(forKey: "debugHero").flatMap(HeroClass.init(rawValue:)), hero != heroClass {
             // Tests : change de héros où qu'il soit, en gardant la même part de PV.
@@ -241,10 +293,63 @@ final class GameState {
     var maxHP: Double { maxHP(at: level) }
     var attack: Double { attack(at: level) }
     private func maxHP(at level: Int) -> Double {
-        ((100 + 20 * Double(level - 1) + gear(.amulet)) * heroLook.hpFactor * companionHPFactor).rounded()
+        ((100 + 20 * Double(level - 1) + gear(.amulet)) * heroLook.hpFactor * companionHPFactor
+            * (has(.glassBlade) ? Relic.glassHP : 1)).rounded()
     }
     private func attack(at level: Int) -> Double {
-        ((10 + 3 * Double(level - 1) + gear(.weapon)) * heroLook.attackFactor * condition * companionAttackFactor).rounded()
+        ((10 + 3 * Double(level - 1) + gear(.weapon)) * heroLook.attackFactor * condition * companionAttackFactor
+            * relicAttackFactor).rounded()
+    }
+
+    // MARK: Reliques
+
+    func has(_ relic: Relic) -> Bool { relics.contains(relic) }
+
+    /// Effet des reliques sur les coups : l'éclat de verre, la patte de lapin, et l'amulette selon l'heure.
+    private var relicAttackFactor: Double {
+        var factor = 1.0
+        if has(.glassBlade) { factor *= Relic.glassAttack }
+        if has(.rabbitFoot) { factor *= Relic.rabbitAttack }
+        if has(.moonCharm) { factor *= ambientNow.night ? Relic.moonNight : Relic.moonDay }
+        return factor
+    }
+
+    /// Une relique rejoint le héros. Les PV sont ramenés sous le nouveau maximum si elle l'abaisse.
+    private func gainRelic(_ relic: Relic, live: Bool, source: String) {
+        guard !has(relic) else { return }
+        relics.append(relic)
+        hp = min(hp, maxHP)
+        cheer(8)
+        log(relic.symbol, "\(source) : \(relic.name). \(relic.boon)\(relic.bane.map { ", mais \($0.prefix(1).lowercased() + $0.dropFirst())" } ?? "").", .good)
+        if live { onEvent?(.relicFound(relic)) }
+    }
+
+    // MARK: Heure et météo
+
+    /// La date qui correspond à un instant de l'horloge du jeu. En jeu normal c'est l'heure réelle ;
+    /// en mode test les jours défilent aussi vite que le reste.
+    func gameDate(at time: TimeInterval) -> Date { anchorDate.addingTimeInterval(time - anchorClock) }
+
+    private func ambient(at time: TimeInterval) -> Ambient {
+        #if DEBUG
+        if let frozen = Self.debugAmbient { return frozen }
+        #endif
+        return Ambient.at(gameDate(at: time))
+    }
+
+    /// Pour les règles : l'ambiance à l'instant exact de la simulation.
+    private var ambientNow: Ambient { ambient(at: clock) }
+    /// Pour l'interface : suit l'horloge rafraîchie plusieurs fois par seconde.
+    var ambient: Ambient { ambient(at: uiClock) }
+
+    /// Le temps se coupe à chaque heure pile : jour, nuit et météo ne changent qu'à ce moment-là.
+    private var ambientEventTime: TimeInterval { clock + Ambient.untilNextHour(gameDate(at: clock)) }
+
+    /// Repos au feu de camp selon l'heure et le temps : on dort mieux la nuit, moins bien sous la pluie
+    /// (sauf avec la braise éternelle, qui ne s'éteint jamais).
+    private var campRestFactor: Double {
+        let now = ambientNow
+        return (now.night ? Ambient.nightRest : 1) * (has(.ember) ? 1 : now.weather.restFactor)
     }
 
     // MARK: Bonus du compagnon
@@ -279,7 +384,8 @@ final class GameState {
         if flees >= 3 { list.append(.careful) }
         if meals >= 10 { list.append(.glutton) }
         if cares >= 15 { list.append(.lovable) }
-        return list
+        // Un trait reçu en héritage compte dès le premier jour.
+        return Trait.allCases.filter { list.contains($0) || inheritedTraits.contains($0) }
     }
 
     /// Part des PV sous laquelle le héros renonce : plus tôt s'il est prudent.
@@ -301,12 +407,14 @@ final class GameState {
 
     private func cheer(_ amount: Double) { mood = min(max(mood + amount, 0), 100) }
     /// Fraction : 0.2 pour +20 %.
-    var speedBonus: Double { gear(.boots) / 100 + heroLook.speedBonus + companionSpeedBonus }
+    var speedBonus: Double {
+        gear(.boots) / 100 + heroLook.speedBonus + companionSpeedBonus + (has(.shell) ? Relic.shellSpeed : 0)
+    }
     var luck: Double { gear(.ring) / 100 + heroLook.luckBonus + companionLuckBonus }
     /// Part des dégâts évitée grâce à l'armure (0,2 pour 20 %).
     var defense: Double { gear(.armor) / 100 }
     /// Ce qui reste des dégâts une fois l'armure passée.
-    private var armorFactor: Double { 1 - defense }
+    private var armorFactor: Double { (1 - defense) * (has(.shell) ? Relic.shellArmor : 1) }
 
     /// Changer de héros, c'est abandonner l'actuel à son sort : il ne reviendra pas.
     var isAbandoning: Bool { heroClass != nil }
@@ -318,8 +426,223 @@ final class GameState {
             die(fate: "a été abandonné à son sort", live: true)
         }
         heroClass = choice
+        heroBorn = clock
+        fightsAtBirth = fightsWon
         hp = maxHP
         log("person.fill", "\(choice.theName.prefix(1).uppercased() + choice.theName.dropFirst()) part à l'aventure.", .neutral)
+        refreshUI()
+        save()
+        replan()
+    }
+
+    // MARK: Héritage
+
+    /// Le dernier héros tombé, pour l'écran de succession.
+    var lastGrave: Grave? { graves.last }
+
+    /// Le joueur choisit ce que le héros tombé laisse à son successeur : un seul legs.
+    func chooseLegacy(_ legacy: Legacy) {
+        guard let offer = pendingLegacy, offer.options.contains(legacy) else { return }
+        pendingLegacy = nil
+        let ratio = hp / max(maxHP, 1)
+        switch legacy {
+        case .purse(let extra):
+            gold += extra
+            log("dollarsign.circle.fill", "Héritage : \(extra.short) or de plus dans la bourse.", .good)
+        case .relic(let relic):
+            gainRelic(relic, live: true, source: "Héritage")
+        case .trait(let trait):
+            if !inheritedTraits.contains(trait) { inheritedTraits.append(trait) }
+            log(trait.symbol, "Héritage : le caractère « \(trait.name) » se transmet.", .good)
+        }
+        // Un legs qui change les PV max garde la même proportion de vie.
+        if heroClass != nil { hp = max((maxHP * ratio).rounded(), 1) }
+        if let index = graves.firstIndex(where: { $0.id == offer.grave }) { graves[index].legacy = legacy.title }
+        chanceCache.removeAll()
+        refreshUI()
+        save()
+        replan()
+    }
+
+    // MARK: Visiteurs du camp
+
+    /// Le visiteur présent au feu de camp, tant que le joueur ne lui a pas répondu.
+    var visitor: CampVisit? {
+        guard case .resting = activity, heroClass != nil else { return nil }
+        let now = gameDate(at: uiClock)
+        var visit = CampVisit.current(at: now)
+        #if DEBUG
+        if let debugVisitor {
+            visit = CampVisit(id: "debug", kind: debugVisitor, start: now, end: now.addingTimeInterval(3_600), seed: 42)
+        }
+        #endif
+        guard let visit, !answeredVisits.contains(visit.id) else { return nil }
+        return settled(visit)
+    }
+
+    /// Tous les compagnons sont déjà là : la bête égarée laisse la place à un pèlerin.
+    private func settled(_ visit: CampVisit) -> CampVisit {
+        guard visit.kind == .stray, strayCompanion(for: visit) == nil else { return visit }
+        return CampVisit(id: visit.id, kind: .pilgrim, start: visit.start, end: visit.end, seed: visit.seed)
+    }
+
+    /// Prix des visiteurs : ils suivent l'avancée dans les donjons, comme la boutique.
+    private func visitPrice(_ base: Double) -> Double { (base * pow(3, Double(shopTier - 1))).rounded() }
+
+    /// La relique que propose ce marchand : toujours la même pendant sa visite.
+    func merchantRelic(for visit: CampVisit) -> Relic? {
+        let pool = Relic.allCases.filter { !has($0) }
+        return pool.isEmpty ? nil : pool[Int(visit.seed % UInt64(pool.count))]
+    }
+
+    /// L'animal qui rôde : un compagnon pas encore apprivoisé.
+    func strayCompanion(for visit: CampVisit) -> CompanionKind? {
+        let pool = CompanionKind.allCases.filter { !owns($0) }
+        return pool.isEmpty ? nil : pool[Int(visit.seed % UInt64(pool.count))]
+    }
+
+    /// Ce que le joueur peut répondre au visiteur.
+    func visitOptions(_ visit: CampVisit) -> [VisitOption] {
+        func poor(_ price: Double) -> String? { gold >= price ? nil : "Pas assez d'or" }
+        switch visit.kind {
+        case .merchant:
+            var options: [VisitOption] = []
+            if let relic = merchantRelic(for: visit) {
+                let price = visitPrice(250)
+                options.append(VisitOption(id: 0, title: relic.name,
+                                           detail: [relic.boon, relic.bane].compactMap { $0 }.joined(separator: " · "),
+                                           price: price, blocker: poor(price)))
+            }
+            let price = visitPrice(55)
+            let full = rations >= Self.packSize && count(.water) >= Self.packSize
+            options.append(VisitOption(id: 1, title: "Lot de voyage", detail: "2 rations et 2 gourdes d'eau",
+                                       price: price, blocker: full ? "Sac plein" : poor(price)))
+            options.append(VisitOption(id: 2, title: "Le saluer", detail: "Il repart en sifflotant"))
+            return options
+        case .wounded:
+            return [
+                VisitOption(id: 0, title: "Le soigner", detail: "1 herbes médicinales · il saura vous remercier",
+                            blocker: count(.herbs) > 0 ? nil : "Pas d'herbes"),
+                VisitOption(id: 1, title: "Partager une ration", detail: "1 ration · il laisse une tisane",
+                            blocker: rations > 0 ? nil : "Pas de ration"),
+                VisitOption(id: 2, title: "Passer son chemin", detail: "\(name) aura mauvaise conscience"),
+            ]
+        case .gambler:
+            let small = visitPrice(25), big = visitPrice(100)
+            let odds = Int((gambleChance * 100).rounded())
+            return [
+                VisitOption(id: 0, title: "Miser petit", detail: "\(odds)\u{00A0}% de doubler la mise",
+                            price: small, blocker: poor(small)),
+                VisitOption(id: 1, title: "Miser gros", detail: "\(odds)\u{00A0}% de doubler la mise",
+                            price: big, blocker: poor(big)),
+                VisitOption(id: 2, title: "Décliner", detail: "Les dés ne sont pas pour tout le monde"),
+            ]
+        case .pilgrim:
+            let offering = visitPrice(40), healing = visitPrice(30)
+            return [
+                VisitOption(id: 0, title: "Faire une offrande", detail: "+25\u{00A0}% d'attaque au prochain donjon",
+                            price: offering, blocker: scrollReady ? "Déjà béni" : poor(offering)),
+                VisitOption(id: 1, title: "Demander ses soins", detail: "Guérit les blessures, +20\u{00A0}% de PV",
+                            price: healing, blocker: injured || hp < maxHP ? poor(healing) : "En pleine forme"),
+                VisitOption(id: 2, title: "Écouter ses récits", detail: "+12 de moral"),
+            ]
+        case .stray:
+            let beast = strayCompanion(for: visit)?.theName ?? "la bête"
+            return [
+                VisitOption(id: 0, title: "Offrir une ration", detail: "1 ration · 40\u{00A0}% d'apprivoiser \(beast)",
+                            blocker: rations > 0 ? nil : "Pas de ration"),
+                VisitOption(id: 1, title: "Offrir des fruits", detail: "1 fruits des bois · 20\u{00A0}% de l'apprivoiser",
+                            blocker: count(.fruit) > 0 ? nil : "Pas de fruits"),
+                VisitOption(id: 2, title: "La laisser tranquille", detail: "Elle retourne dans les bois"),
+            ]
+        }
+    }
+
+    /// Chance de gagner aux dés : un peu moins d'une sur deux, la chance du héros aide.
+    private var gambleChance: Double { min(0.46 + luck * 0.15, 0.65) }
+
+    /// Le joueur répond au visiteur : une seule réponse par visite, puis il s'en va.
+    func answerVisit(_ visit: CampVisit, option id: Int) {
+        guard let current = visitor, current.id == visit.id,
+              let option = visitOptions(current).first(where: { $0.id == id }), option.blocker == nil else { return }
+        settleRest()
+        answeredVisits.append(current.id)
+        if answeredVisits.count > 8 { answeredVisits.removeFirst(answeredVisits.count - 8) }
+        #if DEBUG
+        debugVisitor = nil
+        #endif
+        if let price = option.price { gold -= price }
+        var outcome = VisitOutcome(symbol: current.kind.symbol, text: "", good: true)
+        switch (current.kind, id) {
+        case (.merchant, 0):
+            if let relic = merchantRelic(for: current) {
+                gainRelic(relic, live: true, source: "Achetée au marchand ambulant")
+                outcome = VisitOutcome(symbol: relic.symbol, text: "\(relic.name) est à vous. \(relic.boon).", good: true)
+            }
+        case (.merchant, 1):
+            pantry[.ration] = min(rations + 2, Self.packSize)
+            pantry[.water] = min(count(.water) + 2, Self.packSize)
+            outcome.text = "Deux rations et deux gourdes rejoignent le sac."
+        case (.merchant, _):
+            cheer(3)
+            outcome.text = "Le marchand soulève son chapeau et reprend la route."
+        case (.wounded, 0):
+            pantry[.herbs, default: 0] -= 1
+            let thanks = (questReward * 1.5).rounded()
+            gold += thanks
+            goldEarned += thanks
+            cares += 1
+            cheer(15)
+            outcome.text = "Pansé, il repart debout et laisse \(thanks.short) or en remerciement."
+        case (.wounded, 1):
+            pantry[.ration, default: 0] -= 1
+            pantry[.tea, default: 0] += 1
+            cheer(8)
+            outcome.text = "Il mange en silence, puis glisse une tisane dans le sac de \(name)."
+        case (.wounded, _):
+            cheer(-8)
+            outcome = VisitOutcome(symbol: "cloud.rain.fill", text: "\(name) le regarde s'éloigner en boitant. Le cœur n'y est pas.", good: false)
+        case (.gambler, 0), (.gambler, 1):
+            let stake = option.price ?? 0
+            if Double.random(in: 0..<1, using: &rng) < gambleChance {
+                gold += stake * 2
+                goldEarned += stake
+                cheer(8)
+                outcome.text = "Double six ! \(name) empoche \((stake * 2).short) or."
+            } else {
+                cheer(-4)
+                outcome = VisitOutcome(symbol: "dice.fill", text: "Les dés roulent mal : \(stake.short) or perdus.", good: false)
+            }
+        case (.gambler, _):
+            outcome.text = "Le joueur hausse les épaules et range ses dés."
+        case (.pilgrim, 0):
+            scrollReady = true
+            cheer(5)
+            outcome.text = "Le pèlerin bénit l'arme de \(name) : +25\u{00A0}% d'attaque au prochain donjon."
+        case (.pilgrim, 1):
+            injured = false
+            hp = min(hp + (maxHP * 0.2).rounded(), maxHP)
+            outcome.text = "Ses mains sont chaudes : les plaies de \(name) se referment."
+        case (.pilgrim, _):
+            cheer(12)
+            outcome.text = "Il raconte les routes du monde. \(name) en oublie la fatigue."
+        case (.stray, 0), (.stray, 1):
+            let ration = id == 0
+            pantry[ration ? .ration : .fruit, default: 0] -= 1
+            if let beast = strayCompanion(for: current), Double.random(in: 0..<1, using: &rng) < (ration ? 0.4 : 0.2) {
+                tameCompanion(beast, live: true)
+                outcome = VisitOutcome(symbol: "pawprint.fill", text: "\(beast.theName.prefix(1).uppercased() + beast.theName.dropFirst()) mange dans la main de \(name), et reste.", good: true)
+            } else {
+                cheer(4)
+                outcome.text = "La bête avale tout et file dans la nuit. Elle reviendra peut-être."
+            }
+        case (.stray, _):
+            outcome.text = "La bête s'éloigne sans bruit."
+        }
+        log(outcome.symbol, "\(current.kind.name) : \(outcome.text)", outcome.good ? .good : .bad)
+        visitOutcome = outcome
+        onEvent?(.visited(symbol: outcome.symbol, good: outcome.good))
+        chanceCache.removeAll()
         refreshUI()
         save()
         replan()
@@ -365,7 +688,9 @@ final class GameState {
     private static func xpNeeded(at level: Int) -> Double { (30 * pow(1.35, Double(level - 1))).rounded() }
 
     /// Accélération du repos : sac de couchage et améliorations du feu.
-    var restBoost: Double { (hasBedroll ? 1.5 : 1) * (1 + 0.25 * Double(campLevel)) * companionRestFactor }
+    var restBoost: Double {
+        (hasBedroll ? 1.5 : 1) * (1 + 0.25 * Double(campLevel)) * companionRestFactor * (has(.ember) ? Relic.emberRest : 1)
+    }
     /// PV et énergie regagnés par seconde de jeu au feu de camp : 2,2 % des PV
     /// et 1,8 point d'énergie par minute, avant bonus.
     /// Le repos reste calé sur le rythme des donjons, mais plus court qu'avant : on en avait assez
@@ -576,7 +901,8 @@ final class GameState {
 
     private func odds(of dungeon: Dungeon, rank: Int) -> (success: Double, death: Double) {
         let key = "\(dungeon.id).\(rank).\(level).\(Int(hp)).\(Int(energy)).\(potions).\(scrollReady).\(attack).\(maxHP)"
-            + ".\(Int(hunger / 25)).\(Int(thirst / 25)).\(injured).\(Int(escapeChance() * 100)).\(Int(defense * 100))"
+            + ".\(Int(hunger / 25)).\(Int(thirst / 25)).\(injured).\(Int(escapeChance() * 100)).\(Int(armorFactor * 100))"
+            + ".\(relics.map(\.rawValue).joined()).\(Ambient.hourIndex(gameDate(at: clock)))"
         if let known = chanceCache[key] { return known }
         var generator = SeededGenerator(state: UInt64(dungeon.id * 7_919 + rank * 104_729))
         let trials = 60
@@ -616,15 +942,19 @@ final class GameState {
         var hp = self.hp, energy = self.energy, potions = self.potions
         var level = self.level, xp = self.xp
         var maxHP = self.maxHP, power = attack * (scrollReady ? 1.25 : 1)
+        // Heure d'entrée estimée : la nuit, les monstres frappent plus fort.
+        let entry = clock + (currentPlace.map { travelTime(from: $0, to: .dungeon(dungeon.id)) } ?? 0)
+        let pace = roomDuration(dungeon)
         for index in 0..<dungeon.rooms {
             let kind = Self.roomKind(index: index, rooms: dungeon.rooms, using: &generator)
             let spread = Double.random(in: 0.8...1.2, using: &generator)
-            let heal = (maxHP * 0.4).rounded()
+            let heal = (maxHP * potionShare).rounded()
+            let night = ambient(at: entry + Double(index) * pace).night ? Ambient.nightDamage : 1
             switch kind {
             case .monster, .boss:
                 let boss = kind == .boss
                 let damage = Self.fightDamage(foeHP: dungeon.monsterHP * scale * (boss ? 3 : 1),
-                                              foeDamage: dungeon.monsterDamage * scale * (boss ? 1.5 : 1),
+                                              foeDamage: dungeon.monsterDamage * scale * (boss ? 1.5 : 1) * night,
                                               attack: power, spread: spread) * armorFactor
                 if damage >= hp {
                     guard potions > 0, damage < hp + heal else { return .fled(energy: energy, knockedOut: true, boss: boss) }
@@ -641,11 +971,11 @@ final class GameState {
                     power = attack(at: level) * (scrollReady ? 1.25 : 1)
                 }
             case .trap:
-                let damage = (dungeon.monsterDamage * scale * 1.5 * spread * armorFactor).rounded()
+                let damage = (dungeon.monsterDamage * scale * 1.5 * spread * armorFactor * trapFactor).rounded()
                 if damage >= hp { return .fled(energy: energy, knockedOut: true, boss: false) }
                 hp = max(hp - damage, 1)
             case .fountain:
-                hp = min(hp + (maxHP * 0.15).rounded(), maxHP)
+                hp = min(hp + (maxHP * 0.15 * shrineFactor).rounded(), maxHP)
             case .chest:
                 break
             }
@@ -683,7 +1013,7 @@ final class GameState {
 
     /// Durée d'un trajet en secondes de jeu. Tout passe par le camp.
     func travelTime(from: Place, to: Place) -> TimeInterval {
-        (from.distance + to.distance) / (1 + speedBonus)
+        (from.distance + to.distance) / (1 + speedBonus) * ambientNow.weather.travelFactor
     }
 
     /// Envoie le héros quelque part. Possible seulement au camp ou à la boutique.
@@ -778,7 +1108,8 @@ final class GameState {
         let span = time - clock
         // Affamé ou assoiffé, le corps ne récupère plus rien.
         if !isStarving {
-            if case .resting = activity { restDebt += span }
+            // Au camp, la nuit et la météo pèsent sur le repos : le temps est déjà coupé à chaque heure pile.
+            if case .resting = activity { restDebt += span * campRestFactor }
             // En balade, le héros récupère à moitié moins vite qu'au camp.
             if case .roaming = activity { restDebt += span * 0.5 }
             // À la taverne aussi, assis près de l'âtre, mais l'ambiance compte plus que le sommeil.
@@ -804,8 +1135,29 @@ final class GameState {
     private var needsPace: Double { 1 }
     /// En mode test, faim, soif et moral ralentissent d'autant : on teste sans le voir mourir de soif en une minute.
     private var needsDamp: Double { timeScale > 1 ? 30 / timeScale : 1 }
-    private var hungerRate: Double { 100 / Self.hungerSpan * needsPace * needsDamp }
-    private var thirstRate: Double { 100 / Self.thirstSpan * needsPace * needsDamp }
+    private var hungerRate: Double {
+        100 / Self.hungerSpan * needsPace * needsDamp * (has(.hermitFlask) ? Relic.hermitNeeds : 1)
+    }
+    /// Sous la pluie on a moins soif, sauf au fond d'un donjon où il ne pleut pas.
+    private var thirstRate: Double {
+        100 / Self.thirstSpan * needsPace * needsDamp * (has(.hermitFlask) ? Relic.hermitNeeds : 1)
+            * (isExploring ? 1 : ambientNow.weather.thirstFactor)
+    }
+
+    /// Moment où l'hydratation passera sous `level` si le héros reste où il est. On avance heure par
+    /// heure, parce que la pluie ralentit la soif et que le temps change.
+    private func thirstReaches(_ level: Double) -> TimeInterval {
+        let base = 100 / Self.thirstSpan * needsPace * needsDamp * (has(.hermitFlask) ? Relic.hermitNeeds : 1)
+        var time = clock, left = thirst - level
+        for _ in 0..<240 where left > 0 {
+            let rate = base * (isExploring ? 1 : ambient(at: time).weather.thirstFactor)
+            let span = Ambient.untilNextHour(gameDate(at: time))
+            if left <= rate * span { return time + left / rate }
+            left -= rate * span
+            time += span
+        }
+        return time
+    }
 
     /// Prochain seuil des besoins : un besoin qui tombe à zéro, ou la mort d'un héros oublié.
     private var needsEventTime: TimeInterval? {
@@ -820,7 +1172,7 @@ final class GameState {
     }
 
     private var nextEventTime: TimeInterval? {
-        [activityEventTime, needsEventTime].compactMap { $0 }.min()
+        [activityEventTime, needsEventTime, heroClass == nil ? nil : ambientEventTime].compactMap { $0 }.min()
     }
 
     private var activityEventTime: TimeInterval? {
@@ -876,6 +1228,7 @@ final class GameState {
         var rate = 3.0 / 3_600
         if case .resting = activity, hp >= maxHP, energy >= Self.maxEnergy { rate = 8.0 / 3_600 }
         if traits.contains(.lovable) { rate /= 2 }
+        if has(.hermitFlask) { rate *= Relic.hermitMood }
         if case .tavern = activity {
             // L'ambiance de la taverne : le moral monte au lieu de s'user.
             mood = min(mood + seconds * TavernOrder.moodPerHour / 3_600, 100)
@@ -985,7 +1338,7 @@ final class GameState {
     }
 
     /// Récompense d'une quête du jour : elle suit l'avancée dans les donjons.
-    var questReward: Double { (40 * pow(3, Double(shopTier - 1))).rounded() }
+    var questReward: Double { (25 * pow(3, Double(shopTier - 1))).rounded() }
 
     func questCount(_ kind: QuestKind) -> Int { min(questProgress[kind.rawValue] ?? 0, kind.target) }
 
@@ -1208,7 +1561,7 @@ final class GameState {
             let scale = Dungeon.rankScale(run.level)
             let boss = room.kind == .boss
             room.knockedOut = false
-            room.gold = (dungeon.gold * scale * (boss ? 10 : 1) * Self.goldDropFactor).rounded()
+            room.gold = (dungeon.gold * Dungeon.goldRankScale(run.level) * (boss ? 10 : 1) * Self.goldDropFactor).rounded()
             room.xp = dungeon.xp * scale * (boss ? 5 : 1)
         }
         room.hpDelta = (potion ? potionHeal : 0) - taken
@@ -1218,6 +1571,7 @@ final class GameState {
         run.roomEnd = min(run.roomEnd, clock + 1.2 * timeScale)
         activity = .exploring(run)
         skillCharge = 0
+        if has(.stormHeart) { hunger = max(hunger - Relic.stormHunger, 0) }
         cheer(5)
         log("bolt.circle.fill", "\(name) déclenche son coup spécial !", .good)
         onEvent?(.skill)
@@ -1348,16 +1702,21 @@ final class GameState {
         if let forced, kind != .boss { kind = forced }
         let sharp = blessings.contains(.sharp) ? Blessing.sharpBonus : 1
         let stone = blessings.contains(.stone) ? Blessing.stoneFactor : 1
-        let fortune = blessings.contains(.fortune) ? Blessing.fortuneBonus : 1
+        // La nuit, les monstres frappent plus fort et leur butin est plus riche.
+        let night = ambientNow.night
+        let fortune = (blessings.contains(.fortune) ? Blessing.fortuneBonus : 1)
+            * (has(.miserPurse) ? Relic.miserGold : 1) * (night ? Ambient.nightGold : 1)
         let spread = Double.random(in: 0.8...1.2, using: &rng)
         let scale = Dungeon.rankScale(rank)
+        let goldScale = Dungeon.goldRankScale(rank)
 
         switch kind {
         case .monster, .boss:
             let boss = kind == .boss
             let foe = boss ? dungeon.boss : (dungeon.monsters.randomElement(using: &rng) ?? dungeon.monsters[0])
             let damage = (Self.fightDamage(foeHP: dungeon.monsterHP * scale * (boss ? 3 : 1),
-                                           foeDamage: dungeon.monsterDamage * scale * (boss ? 1.5 : 1),
+                                           foeDamage: dungeon.monsterDamage * scale * (boss ? 1.5 : 1)
+                                               * (night ? Ambient.nightDamage : 1),
                                            attack: attack * (boosted ? 1.25 : 1) * sharp, spread: spread)
                           * stone * armorFactor).rounded()
             let needsPotion = damage >= hp
@@ -1374,32 +1733,44 @@ final class GameState {
             // Un monstre sur huit laisse tomber quelque chose à manger ou à boire.
             let snack = Double.random(in: 0..<1, using: &rng) < 0.12
                 ? [Provision.fruit, .ration, .tea, .water].randomElement(using: &rng) : nil
+            // Le premier boss de chaque donjon garde une relique pour ce héros ; ensuite, c'est rare.
+            var relic: Relic?
+            if boss {
+                let pool = Relic.allCases.filter { !has($0) }
+                let first = clears[dungeon.id] == 0
+                if !pool.isEmpty, first || Double.random(in: 0..<1, using: &rng) < Relic.bossChance {
+                    relic = pool[Int.random(in: 0..<pool.count, using: &rng)]
+                }
+            }
             return Room(kind: kind, sprite: foe.sprite, name: foe.name,
                         hpDelta: needsPotion ? potionHeal - damage : -damage,
-                        gold: (dungeon.gold * scale * (boss ? 10 : 1) * spread * fortune * Self.goldDropFactor).rounded(),
+                        gold: (dungeon.gold * goldScale * (boss ? 10 : 1) * spread * fortune * Self.goldDropFactor).rounded(),
                         xp: dungeon.xp * scale * (boss ? 5 : 1), item: item, knockedOut: false,
-                        usesPotion: needsPotion, provision: snack)
+                        usesPotion: needsPotion, provision: snack, relic: relic)
         case .chest:
             let lucky = Double.random(in: 0..<1, using: &rng) < min(0.5 * (1 + luck), 0.95)
             let provision = Double.random(in: 0..<1, using: &rng) < 0.4 ? Provision.allCases.randomElement(using: &rng) : nil
             return Room(kind: .chest, sprite: "chest_closed", name: "Coffre", hpDelta: 0,
-                        gold: (dungeon.gold * scale * 4 * spread * fortune * Self.goldDropFactor).rounded(), xp: 0,
+                        gold: (dungeon.gold * goldScale * 4 * spread * fortune * Self.goldDropFactor).rounded(), xp: 0,
                         item: lucky ? Item.random(tier: dungeon.tier, rank: rank, luck: luck, hero: heroLook, using: &rng) : nil,
                         knockedOut: false, provision: provision)
         case .trap:
-            let damage = (dungeon.monsterDamage * scale * 1.5 * spread * stone * armorFactor).rounded()
+            let damage = (dungeon.monsterDamage * scale * 1.5 * spread * stone * armorFactor * trapFactor).rounded()
             let fatal = damage >= hp
             return Room(kind: .trap, sprite: "trap_spikes", name: "Piège",
                         hpDelta: fatal ? -(hp - woundedHP) : -damage,
                         gold: 0, xp: 0, item: nil, knockedOut: fatal)
         case .fountain:
             return Room(kind: .fountain, sprite: "shrine", name: "Sanctuaire",
-                        hpDelta: (maxHP * 0.15).rounded(), gold: 0, xp: 0, item: nil, knockedOut: false)
+                        hpDelta: (maxHP * 0.15 * shrineFactor).rounded(), gold: 0, xp: 0, item: nil, knockedOut: false)
         }
     }
 
     /// PV rendus par une potion.
-    var potionHeal: Double { (maxHP * 0.4).rounded() }
+    var potionHeal: Double { (maxHP * potionShare).rounded() }
+    private var potionShare: Double { has(.miserPurse) ? Relic.miserPotion : 0.4 }
+    private var trapFactor: Double { has(.chalice) ? Relic.chaliceTrap : 1 }
+    private var shrineFactor: Double { has(.chalice) ? Relic.chaliceHeal : 1 }
 
     /// PV restants après une fuite de justesse.
     private var woundedHP: Double { min(hp, max((maxHP * 0.05).rounded(), 1)) }
@@ -1446,7 +1817,7 @@ final class GameState {
             fightsWon += 1
             note(.fights)
             // Chaque victoire remplit la jauge du coup spécial et met du baume au cœur.
-            skillCharge = min(skillCharge + 1.0 / 3, 1)
+            skillCharge = min(skillCharge + (has(.stormHeart) ? 0.5 : 1.0 / 3), 1)
             cheer(room.kind == .boss ? 10 : 1)
             if room.kind == .boss { bossKills += 1 }
         }
@@ -1481,6 +1852,9 @@ final class GameState {
             run.items += 1
             log("sparkles", "Objet trouvé : \(item.title(for: heroLook)) (\(item.bonusText)), dans la sacoche.", .good)
             if live { onEvent?(.loot(item: item, outcome: .carried)) }
+        }
+        if let relic = room.relic {
+            gainRelic(relic, live: live, source: "Relique arrachée à \(room.name)")
         }
 
         if run.roomIndex == dungeon.rooms - 1 {
@@ -1618,6 +1992,8 @@ final class GameState {
         chance -= thirst <= 0 ? 0.25 : thirst < 25 ? 0.15 : 0
         if injured { chance -= 0.10 }
         if traits.contains(.careful) { chance += 0.05 }
+        if has(.rabbitFoot) { chance += Relic.rabbitEscape }
+        chance += ambientNow.weather.escapeBonus
         chance += gear(.boots) / 400 + gear(.ring) / 800 + gear(.helmet) / 100
         return min(max(chance, 0.05), 0.97)
     }
@@ -1649,6 +2025,22 @@ final class GameState {
         let fallen = name
         lastFate = "\(fallen) \(fate)"
         let legacy = (gold * 0.25).rounded()
+        // Sa tombe rejoint le cimetière, et ce qu'il peut transmettre attend le choix du joueur.
+        let deepest = Dungeon.all.last { bestRanks[$0.id] > 0 }
+        let grave = Grave(name: fallen, heroClass: heroLook, level: level, generation: generation, fate: fate,
+                          date: gameDate(at: clock), days: heroBorn.map { Int((clock - $0) / 86_400) },
+                          traits: traits, relics: relics, dungeon: deepest?.id,
+                          rank: deepest.map { bestRanks[$0.id] }, fights: max(fightsWon - fightsAtBirth, 0),
+                          companion: activeCompanion)
+        graves.append(grave)
+        if graves.count > 40 { graves.removeFirst(graves.count - 40) }
+        let offer = PendingLegacy(grave: grave.id, purse: legacy, relics: relics, traits: traits)
+        pendingLegacy = offer.options.isEmpty ? nil : offer
+        relics = []
+        inheritedTraits = []
+        heroBorn = nil
+        fightsAtBirth = fightsWon
+        visitOutcome = nil
         gold = legacy
         level = 1
         xp = 0
@@ -1713,9 +2105,9 @@ final class GameState {
             unseenLoot += 1
             outcome = .stored
         } else {
-            gold += item.sellValue
+            gold += item.resaleValue
             outcome = .sold
-            log("sparkles", "Sac plein : \(item.title(for: heroLook)) vendu \(item.sellValue.short) or.", .neutral)
+            log("sparkles", "Sac plein : \(item.title(for: heroLook)) vendu \(item.resaleValue.short) or.", .neutral)
         }
         if live { onEvent?(.loot(item: item, outcome: outcome)) }
     }
@@ -1772,12 +2164,12 @@ final class GameState {
     func sell(_ item: Item) {
         guard isShopping, let index = bag.firstIndex(where: { $0.id == item.id }) else { return }
         bag.remove(at: index)
-        gold += item.sellValue
-        onEvent?(.sold(gold: item.sellValue))
+        gold += item.resaleValue
+        onEvent?(.sold(gold: item.resaleValue))
         save()
     }
 
-    var bagSellValue: Double { bag.reduce(0) { $0 + $1.sellValue } }
+    var bagSellValue: Double { bag.reduce(0) { $0 + $1.resaleValue } }
 
     func sellBag() {
         guard isShopping, !bag.isEmpty else { return }
@@ -1868,9 +2260,14 @@ final class GameState {
             guard isRecovering else {
                 return ActivityInfo(title: "Au feu de camp", detail: "Reposé, prêt à partir", progress: nil, eta: nil)
             }
-            let left = max((maxHP - hp) / hpRegen, (Self.maxEnergy - energy) / energyRegen)
+            let left = max((maxHP - hp) / hpRegen, (Self.maxEnergy - energy) / energyRegen) / campRestFactor
+            let now = ambient
+            let detail = isStarving ? "Il dépérit : à boire et à manger, vite"
+                : injured ? "Blessé, il guérit lentement"
+                : !has(.ember) && now.weather.restFactor < 1 ? "La pluie étouffe le feu"
+                : now.night ? "Il dort près des braises" : "Le héros reprend des forces"
             return ActivityInfo(title: "Au feu de camp",
-                                detail: injured ? "Blessé, il guérit lentement" : "Le héros reprend des forces",
+                                detail: detail,
                                 progress: min(hp / maxHP, energy / Self.maxEnergy), eta: left / timeScale)
         case .shopping:
             return ActivityInfo(title: "À la boutique", detail: "Achetez, vendez, puis repartez", progress: nil, eta: nil)
@@ -2018,19 +2415,22 @@ final class GameState {
             result.landing = currentPlace ?? .camp
             result.gold = gold - before.gold
             result.items = bag.count + equipped.count - before.items
-            if case .resting = activity, isRecovering, !isStarving {
-                result.restedAt = clock + max((maxHP - hp) / hpRegen, (Self.maxEnergy - energy) / energyRegen)
-            }
-            result.starvesAt = needsEventTime.flatMap { _ in
-                isStarving ? clock : [hunger > 0 ? clock + hunger / hungerRate : nil,
-                                      thirst > 0 ? clock + thirst / thirstRate : nil]
-                    .compactMap { $0 }.min()
-            }
+            // S'il ne dépérit pas déjà, l'instant exact se lit plus bas, en avançant : la soif dépend de la météo.
+            result.starvesAt = isStarving ? clock : nil
         }
         if activityEventTime == nil { park() }
         while let time = nextEventTime, steps < 1000, time <= horizon {
             steps += 1
             let moving = activityEventTime.map { time >= $0 } ?? false
+            // Au camp, le repos avance heure par heure, au rythme de la nuit et de la météo.
+            if parked, result.restedAt == nil, case .resting = activity, !isStarving {
+                settleRest()
+                if isRecovering {
+                    let need = max((maxHP - hp) / hpRegen, (Self.maxEnergy - energy) / energyRegen)
+                    let pace = campRestFactor
+                    if need <= (time - clock) * pace { result.restedAt = clock + need / pace }
+                }
+            }
             pass(to: time)
             if result.forkAt == nil, case .exploring(let run) = activity, run.fork != nil, run.forkChoice == nil {
                 result.forkAt = run.roomStart
@@ -2042,6 +2442,7 @@ final class GameState {
             let drain = drainHP * Self.starveDrain / 3_600 * emptyNeeds * needsDamp
             var room: TimeInterval = 0
             if case .exploring(let run) = activity { room = run.roomEnd - run.roomStart }
+            if parked, result.starvesAt == nil, isStarving { result.starvesAt = time }
             handleEvent(live: false)
             if generation != lineage {
                 result.diesAt = time
@@ -2212,10 +2613,20 @@ final class GameState {
                 body: "Donnez-lui une ration au feu de camp, sinon il se battra moins bien."))
         }
         if case .resting = activity, thirst > 25 {
-            let thirsty = clockNow + (thirst - 25) / thirstRate
+            let thirsty = thirstReaches(25)
             plan.notifications.append(PlannedNotification(
                 id: "hero.thirsty", date: date(thirsty), title: "\(name) a soif",
                 body: "Donnez-lui sa gourde au feu de camp. Assoiffé, il fuit mal et finit par dépérir."))
+        }
+        // Un visiteur passera au camp : on prévient, si le héros y est pour l'accueillir.
+        if case .resting = activity, heroClass != nil,
+           let visit = CampVisit.next(after: gameDate(at: clockNow)).map(settled), !answeredVisits.contains(visit.id) {
+            let arrives = clockNow + visit.start.timeIntervalSince(gameDate(at: clockNow))
+            if ahead.diesAt.map({ arrives < $0 }) ?? true {
+                plan.notifications.append(PlannedNotification(
+                    id: "hero.visitor", date: date(arrives), title: visit.kind.notice,
+                    body: "Il ne restera que deux heures. À vous de voir ce que \(name) en fait."))
+            }
         }
         if let fork = ahead.forkAt, fork > clockNow {
             plan.notifications.append(PlannedNotification(
@@ -2297,6 +2708,8 @@ final class GameState {
     func setTestSpeed(_ scale: Double) {
         settleRest()
         timeScale = scale > 1 ? scale : 1
+        // De retour en temps réel, l'heure du jeu se recale sur celle du téléphone.
+        if timeScale == 1 { (anchorDate, anchorClock) = (Date(), clock) }
         UserDefaults.standard.set(timeScale, forKey: Self.timeScaleKey)
         refreshUI()
         replan()
@@ -2355,6 +2768,16 @@ final class GameState {
         /// Absents des sauvegardes d'avant les compagnons.
         var activeCompanion: CompanionKind?
         var unlockedCompanions: [String]?
+        /// Absents des sauvegardes d'avant les reliques, le cimetière, les visiteurs et la météo.
+        var relics: [Relic]?
+        var inheritedTraits: [Trait]?
+        var graves: [Grave]?
+        var pendingLegacy: PendingLegacy?
+        var answeredVisits: [String]?
+        var heroBorn: TimeInterval?
+        var fightsAtBirth: Int?
+        var anchorDate: Date?
+        var anchorClock: TimeInterval?
     }
 
     private func snapshot() -> SaveData {
@@ -2370,7 +2793,10 @@ final class GameState {
             kills: kills, exploits: [Double(fightsWon), Double(roams), Double(provisionsFound), goldEarned, Double(dungeonsCleared)],
             claimedAchievements: Array(claimedAchievements), questDay: questDay, quests: quests,
             questProgress: questProgress, questClaimed: Array(questClaimed),
-            activeCompanion: activeCompanion, unlockedCompanions: Array(unlockedCompanions)
+            activeCompanion: activeCompanion, unlockedCompanions: Array(unlockedCompanions),
+            relics: relics, inheritedTraits: inheritedTraits, graves: graves, pendingLegacy: pendingLegacy,
+            answeredVisits: answeredVisits, heroBorn: heroBorn, fightsAtBirth: fightsAtBirth,
+            anchorDate: anchorDate, anchorClock: anchorClock
         )
     }
 
@@ -2449,6 +2875,16 @@ final class GameState {
         unlockedCompanions = Set(data.unlockedCompanions ?? [])
         // On ne garde un compagnon actif que s'il est bien débloqué.
         activeCompanion = data.activeCompanion.flatMap { unlockedCompanions.contains($0.rawValue) ? $0 : nil }
+        relics = data.relics ?? []
+        inheritedTraits = data.inheritedTraits ?? []
+        graves = data.graves ?? []
+        pendingLegacy = data.pendingLegacy
+        answeredVisits = data.answeredVisits ?? []
+        heroBorn = data.heroBorn
+        fightsAtBirth = data.fightsAtBirth ?? 0
+        // Sans repère sauvegardé, l'heure du jeu part de celle du dernier passage.
+        anchorDate = data.anchorDate ?? data.lastTick
+        anchorClock = data.anchorClock ?? data.clock
         hp = min(hp, maxHP)
     }
 
@@ -2468,6 +2904,14 @@ final class GameState {
         heroClass = nil
         activeCompanion = nil
         unlockedCompanions = []
+        relics = []
+        inheritedTraits = []
+        graves = []
+        pendingLegacy = nil
+        answeredVisits = []
+        visitOutcome = nil
+        heroBorn = nil
+        fightsAtBirth = 0
         activity = .resting
         clears = Array(repeating: 0, count: Dungeon.all.count)
         bestRanks = Array(repeating: 0, count: Dungeon.all.count)
@@ -2507,7 +2951,8 @@ extension GameState {
         let symbols = ["hero.landing": "flag.checkered", "hero.rested": "bed.double.fill",
                        "hero.hungry": "fork.knife", "hero.thirsty": "drop.fill",
                        "hero.starving": "exclamationmark.triangle.fill", "hero.dying": "heart.slash.fill",
-                       "hero.fork": "signpost.right.and.left.fill", "hero.bored": "cloud.rain.fill"]
+                       "hero.fork": "signpost.right.and.left.fill", "hero.bored": "cloud.rain.fill",
+                       "hero.visitor": "person.fill.questionmark"]
         let upcoming = notes.filter { $0.date > now }
             .sorted { $0.date < $1.date }
             .map { HeroWidgetData.Upcoming(date: $0.date, title: $0.title, symbol: symbols[$0.id] ?? "bell.fill") }

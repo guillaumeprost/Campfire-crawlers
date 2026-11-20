@@ -196,6 +196,13 @@ struct Item: Codable, Identifiable, Equatable {
     /// Prix du prochain passage à la forge.
     var forgePrice: Double { (sellValue * 3 * pow(1.5, Double(forgeLevel))).rounded() }
 
+    /// Part de la valeur d'un objet que le marchand rend à la revente. Réglée avec
+    /// `Outils/equilibrage.py` : à 100 %, le butin revendu faisait 62 % de l'or gagné et plus
+    /// aucun achat ne comptait. `sellValue` reste la valeur de l'objet (prix d'achat, forge).
+    static let resaleShare = 0.3
+    /// Ce que le marchand en donne.
+    var resaleValue: Double { (sellValue * Self.resaleShare).rounded(.up) }
+
     /// Nombre de dessins par rareté (commun, rare, épique, légendaire), d'après
     /// Art/import_equipements.py. Chaque rareté a son élément : acier, glace, ombre, feu.
     ///

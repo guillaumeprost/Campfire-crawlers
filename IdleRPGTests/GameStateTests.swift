@@ -11,7 +11,9 @@ import XCTest
 final class GameStateTests: XCTestCase {
 
     private let debugKeys = ["save.v2", "debugReset", "debugGold", "debugTimeScale",
-                             "debugHero", "debugGo", "debugHeal", "debugSkill"]
+                             "debugHero", "debugGo", "debugHeal", "debugSkill",
+                             "debugWeather", "debugNight", "debugVisitor", "debugRelic",
+                             "debugLevel", "debugUnlock", "debugFeats"]
 
     override func setUp() {
         super.setUp()
@@ -29,12 +31,23 @@ final class GameStateTests: XCTestCase {
     }
 
     /// Une partie neuve, sans sauvegarde, avec éventuellement de l'or de départ.
-    private func makeGame(gold: Double = 0, timeScale: Double = 1) -> GameState {
+    /// Le temps est figé (jour, ciel dégagé) pour que les chiffres ne dépendent pas de l'heure du test.
+    private func makeGame(gold: Double = 0, timeScale: Double = 1, weather: String? = "clear", night: Bool? = false,
+                          visitor: String? = nil, relic: String? = nil,
+                          level: Int = 1, unlock: Bool = false, feats: Bool = false) -> GameState {
         let d = UserDefaults.standard
         for key in debugKeys { d.removeObject(forKey: key) }
         d.set(true, forKey: "debugReset")
         d.set(gold, forKey: "debugGold")
         d.set(timeScale, forKey: "debugTimeScale")
+        // nil : on laisse l'heure et la météo du jeu suivre la date, comme en vrai.
+        if let weather { d.set(weather, forKey: "debugWeather") }
+        if let night { d.set(night, forKey: "debugNight") }
+        if let visitor { d.set(visitor, forKey: "debugVisitor") }
+        if let relic { d.set(relic, forKey: "debugRelic") }
+        if level > 1 { d.set(level, forKey: "debugLevel") }
+        if unlock { d.set(true, forKey: "debugUnlock") }
+        if feats { d.set(true, forKey: "debugFeats") }
         return GameState()
     }
 
@@ -215,6 +228,375 @@ final class GameStateTests: XCTestCase {
         XCTAssertTrue((0...1).contains(success), "Une probabilité reste entre 0 et 1.")
         XCTAssertTrue((0...1).contains(death))
         XCTAssertGreaterThan(success, 0.5, "La Cave au rang 1 reste abordable pour un héros neuf.")
+    }
+
+    // MARK: Heure et météo
+
+    func testAmbientDependsOnlyOnTheDate() {
+        let noon = Ambient.date(day: 9_500, hour: 12), deepNight = Ambient.date(day: 9_500, hour: 3)
+        XCTAssertFalse(Ambient.isNight(noon), "À midi, il fait jour.")
+        XCTAssertTrue(Ambient.isNight(deepNight), "À 3 h, il fait nuit.")
+        XCTAssertEqual(Ambient.at(noon), Ambient.at(noon), "Même date, même temps : la prévision reste exacte.")
+        XCTAssertEqual(Ambient.weather(at: noon), Ambient.weather(at: noon.addingTimeInterval(1_800)),
+                       "Le temps tient trois heures.")
+        let wait = Ambient.untilNextHour(noon.addingTimeInterval(600))
+        XCTAssertEqual(wait, 3_000, accuracy: 0.01, "La prochaine heure pile est dans 50 minutes.")
+        XCTAssertEqual(Ambient.untilNextHour(noon), 3_600, accuracy: 0.01, "À l'heure pile, on vise la suivante.")
+    }
+
+    func testWeatherSlowsTravelAndRest() {
+        let clear = makeGame(); clear.chooseHero(.warrior)
+        XCTAssertEqual(clear.travelTime(from: .camp, to: .shop), 45, accuracy: 0.001)
+        // Le temps figé est partagé par toutes les parties : on relève la valeur avant d'en changer.
+        let clearEscape = clear.escapeChance()
+        let storm = makeGame(weather: "storm"); storm.chooseHero(.warrior)
+        XCTAssertEqual(storm.travelTime(from: .camp, to: .shop), 45 * 1.25, accuracy: 0.001,
+                       "Sous l'orage, les trajets durent un quart de plus.")
+        let fog = makeGame(weather: "fog"); fog.chooseHero(.warrior)
+        XCTAssertEqual(fog.escapeChance() - clearEscape, 0.10, accuracy: 0.001,
+                       "Dans la brume, on fuit plus facilement.")
+    }
+
+    func testRainSlowsThirst() {
+        let game = makeGame(weather: "rain"); game.chooseHero(.warrior)
+        let start = Date()
+        game.tick(now: start)
+        game.tick(now: start.addingTimeInterval(3_600))
+        XCTAssertEqual(game.thirst, 73, accuracy: 1.0, "Sous la pluie, la soif vient 30 % moins vite.")
+    }
+
+    func testNightMakesDungeonsDeadlier() {
+        let day = makeGame(); day.chooseHero(.mage)
+        let night = makeGame(night: true); night.chooseHero(.mage)
+        let crypt = Dungeon.all[2]
+        XCTAssertLessThanOrEqual(night.successChance(of: crypt, rank: 1), day.successChance(of: crypt, rank: 1),
+                                 "La nuit, les monstres frappent plus fort.")
+    }
+
+    // MARK: Prévision
+
+    /// La prévision rejoue la sortie sur une copie : avec l'heure et la météo réelles (nuits, pluie,
+    /// brume traversées en route), la vraie partie doit arriver au même instant avec le même butin.
+    func testForecastMatchesRealityThroughNightsAndWeather() {
+        for (index, hero) in HeroClass.allCases.enumerated() {
+            let game = makeGame(weather: nil, night: nil); game.chooseHero(hero)
+            let start = Date().addingTimeInterval(Double(index) * 5 * 3_600)   // des heures de départ variées
+            game.tick(now: start)
+            let goldBefore = game.gold
+            game.travel(to: .dungeon(0))
+            let ahead = game.forecast()
+            guard let lands = ahead.landsAt else { return XCTFail("La prévision devrait donner une arrivée.") }
+
+            // Un seul grand saut, comme au retour d'une longue absence : rien n'est joué en direct.
+            game.tick(now: start.addingTimeInterval(lands - game.clock + 1))
+            // La prévision regarde quatre jours devant : une mort de soif bien après le retour ne compte pas ici.
+            if let death = ahead.diesAt, !ahead.starved {
+                game.tick(now: start.addingTimeInterval(death - game.clock + 1))
+                XCTAssertNil(game.heroClass, "\(hero) : la mort prévue à \(death) doit arriver.")
+            } else {
+                XCTAssertEqual(game.currentPlace, .camp, "\(hero) : il doit être rentré à l'heure prévue.")
+                XCTAssertEqual(game.gold - goldBefore, ahead.gold, accuracy: 0.001, "\(hero) : même butin que prévu.")
+            }
+        }
+    }
+
+    /// Les longs donjons (jusqu'au Volcan, plus d'une journée) traversent nuits, météo, carrefours et
+    /// reliques de boss : la prévision doit toujours tomber juste, que le héros gagne, fuie ou meure.
+    func testForecastMatchesRealityInDeepDungeons() {
+        for dungeon in Dungeon.all.dropFirst() {
+            for (hero, level) in [(HeroClass.warrior, 12 * dungeon.tier), (.mage, 6 * dungeon.tier)] {
+                let game = makeGame(weather: nil, night: nil, level: level, unlock: true); game.chooseHero(hero)
+                let start = Date()
+                game.tick(now: start)
+                let goldBefore = game.gold, lineage = game.generation
+                game.travel(to: .dungeon(dungeon.id))
+                guard case .traveling = game.activity else { XCTFail("\(dungeon.name) : départ refusé."); continue }
+                let ahead = game.forecast()
+                let label = "\(dungeon.name), \(hero) niveau \(level)"
+                // Une mort prévue qui n'est ni de faim ni de soif arrive pendant la sortie.
+                if let death = ahead.diesAt, !ahead.starved {
+                    game.tick(now: start.addingTimeInterval(death - game.clock + 1))
+                    XCTAssertEqual(game.generation, lineage + 1, "\(label) : la mort prévue doit arriver.")
+                    XCTAssertEqual(game.graves.count, 1, "\(label) : sa tombe rejoint le cimetière.")
+                } else if let lands = ahead.landsAt {
+                    game.tick(now: start.addingTimeInterval(lands - game.clock + 1))
+                    XCTAssertEqual(game.generation, lineage, "\(label) : il ne devait pas mourir.")
+                    XCTAssertEqual(game.currentPlace, .camp, "\(label) : rentré à l'heure prévue.")
+                    XCTAssertEqual(game.gold - goldBefore, ahead.gold, accuracy: 0.001, "\(label) : même butin que prévu.")
+                } else {
+                    XCTFail("\(label) : ni arrivée ni mort prévue.")
+                }
+            }
+        }
+    }
+
+    /// L'alerte « il dépérit » tombe au bon moment même si la pluie, qui ralentit la soif, va et vient.
+    func testStarvationForecastFollowsTheWeather() {
+        let game = makeGame(weather: nil, night: nil); game.chooseHero(.warrior)
+        let start = Date()
+        game.tick(now: start)
+        guard let starves = game.forecast().starvesAt else { return XCTFail("Un héros oublié finit par dépérir.") }
+        let left = starves - game.clock
+        XCTAssertGreaterThan(left, 3_600 * 6, "Parti à 80 d'hydratation, il tient plusieurs heures.")
+        game.tick(now: start.addingTimeInterval(left - 60))
+        XCTAssertFalse(game.isStarving, "Une minute avant, il tient encore.")
+        game.tick(now: start.addingTimeInterval(left + 60))
+        XCTAssertTrue(game.isStarving, "Une minute après, il dépérit.")
+    }
+
+    /// Le premier boss vaincu d'un donjon laisse une relique, et elle se retrouve après rechargement.
+    func testFirstBossGivesARelic() {
+        let game = makeGame(level: 30); game.chooseHero(.warrior)
+        let start = Date()
+        game.tick(now: start)
+        game.travel(to: .dungeon(0))
+        guard let lands = game.forecast().landsAt else { return XCTFail("Pas d'arrivée prévue.") }
+        game.tick(now: start.addingTimeInterval(lands - game.clock + 1))
+        XCTAssertEqual(game.bestRanks[0], 1, "Un héros de niveau 30 termine la Cave.")
+        XCTAssertEqual(game.relics.count, 1, "Le premier boss de la Cave garde une relique.")
+    }
+
+    /// Le repos prévu heure par heure (nuit plus rapide, pluie plus lente) tombe juste.
+    func testRestForecastFollowsNightAndWeather() {
+        let game = makeGame(weather: nil, night: nil); game.chooseHero(.warrior)
+        let start = Date()
+        game.tick(now: start)
+        game.travel(to: .dungeon(0))
+        guard let lands = game.forecast().landsAt else { return XCTFail("Pas d'arrivée prévue.") }
+        let home = start.addingTimeInterval(lands - game.clock + 1)
+        game.tick(now: home)
+        guard game.heroClass != nil, game.isRecovering else { return }   // mort ou déjà en forme : rien à vérifier
+        // Nourri et abreuvé, pour que seul le repos compte.
+        game.use(.ration); game.use(.water)
+        guard let rested = game.forecast().restedAt else { return XCTFail("Le repos devrait avoir une fin prévue.") }
+        let left = rested - game.clock
+        game.tick(now: home.addingTimeInterval(left - 60))
+        XCTAssertTrue(game.isRecovering, "Une minute avant l'heure prévue, il récupère encore.")
+        game.tick(now: home.addingTimeInterval(left + 60))
+        XCTAssertFalse(game.isRecovering, "Une minute après, il est reposé.")
+    }
+
+    func testNightSpeedsUpRestAndRainSlowsIt() {
+        func restTime(weather: String, night: Bool, relic: String? = nil) -> TimeInterval? {
+            let game = makeGame(weather: weather, night: night, relic: relic); game.chooseHero(.warrior)
+            let start = Date()
+            game.tick(now: start)
+            game.travel(to: .dungeon(0))
+            guard let lands = game.forecast().landsAt else { return nil }
+            game.tick(now: start.addingTimeInterval(lands - game.clock + 1))
+            guard game.heroClass != nil, let rested = game.forecast().restedAt else { return nil }
+            return (rested - game.clock) / max(game.maxHP - game.hp, GameState.maxEnergy - game.energy, 1)
+        }
+        // Même sortie, même fatigue au retour (les tirages partent de la même sauvegarde vide) :
+        // seule la vitesse du repos change.
+        guard let day = restTime(weather: "clear", night: false),
+              let rain = restTime(weather: "rain", night: false) else { return }
+        XCTAssertGreaterThan(rain, day, "Sous la pluie, le feu faiblit.")
+        if let ember = restTime(weather: "rain", night: false, relic: "ember") {
+            XCTAssertLessThan(ember, rain, "La braise éternelle protège le feu de la pluie.")
+        }
+    }
+
+    func testSaveRoundTripKeepsRelicsAndAnsweredVisits() {
+        let first = makeGame(gold: 500, visitor: "merchant"); first.chooseHero(.archer)
+        guard let visit = first.visitor else { return XCTFail("Le marchand devrait être là.") }
+        first.answerVisit(visit, option: 0)   // achète sa relique
+        XCTAssertEqual(first.relics.count, 1)
+        XCTAssertEqual(first.gold, 250)
+        for key in ["debugReset", "debugGold", "debugTimeScale", "debugHero", "debugVisitor"] {
+            UserDefaults.standard.removeObject(forKey: key)
+        }
+        let second = GameState()
+        XCTAssertEqual(second.relics, first.relics)
+        XCTAssertEqual(second.answeredVisits, first.answeredVisits)
+        XCTAssertEqual(second.gold, 250)
+    }
+
+    func testEveryVisitorOffersUsableChoices() {
+        for kind in VisitorKind.allCases {
+            let game = makeGame(gold: 10_000, visitor: kind.rawValue); game.chooseHero(.warrior)
+            guard let visit = game.visitor else { XCTFail("\(kind) devrait être au camp."); continue }
+            let options = game.visitOptions(visit)
+            XCTAssertEqual(options.count, 3, "\(kind) : trois réponses.")
+            XCTAssertEqual(Set(options.map(\.id)).count, 3)
+            // La dernière réponse (refuser, saluer, écouter) est toujours possible.
+            XCTAssertNil(options.last?.blocker, "\(kind) : on peut toujours décliner.")
+            for option in options where option.blocker == nil {
+                let trial = makeGame(gold: 10_000, visitor: kind.rawValue); trial.chooseHero(.warrior)
+                guard let again = trial.visitor else { continue }
+                trial.answerVisit(again, option: option.id)
+                XCTAssertNotNil(trial.visitOutcome, "\(kind), réponse \(option.id) : un résultat s'affiche.")
+                XCTAssertFalse(trial.visitOutcome?.text.isEmpty ?? true)
+                XCTAssertGreaterThanOrEqual(trial.gold, 0)
+                XCTAssertLessThanOrEqual(trial.hp, trial.maxHP)
+            }
+        }
+    }
+
+    func testEveryRelicKeepsStatsSane() {
+        for relic in Relic.allCases {
+            let game = makeGame(relic: relic.rawValue); game.chooseHero(.mage)
+            XCTAssertTrue(game.has(relic))
+            XCTAssertGreaterThan(game.attack, 0)
+            XCTAssertGreaterThan(game.maxHP, 0)
+            XCTAssertLessThanOrEqual(game.hp, game.maxHP)
+            XCTAssertTrue((0.05...0.97).contains(game.escapeChance()))
+            XCTAssertGreaterThan(game.travelTime(from: .camp, to: .shop), 0)
+            let odds = game.successChance(of: Dungeon.all[0], rank: 1)
+            XCTAssertTrue((0...1).contains(odds), "\(relic) : chances valides.")
+        }
+    }
+
+    func testInheritedTraitAppliesFromDayOne() {
+        let game = makeGame(gold: 400, feats: true); game.chooseHero(.warrior)
+        XCTAssertEqual(Set(game.traits), Set(Trait.allCases))
+        UserDefaults.standard.removeObject(forKey: "debugFeats")
+        game.chooseHero(.mage)
+        XCTAssertTrue(game.traits.isEmpty, "Le successeur repart sans caractère.")
+        XCTAssertEqual(game.graves.first?.traits.count, 4, "La tombe garde les traits du défunt.")
+        XCTAssertTrue(game.pendingLegacy?.options.contains(.trait(.careful)) ?? false)
+
+        game.chooseLegacy(.trait(.careful))
+        XCTAssertEqual(game.traits, [.careful])
+        XCTAssertEqual(game.fleeLimit, 0.35, accuracy: 0.001, "Prudent : il se replie plus tôt.")
+        XCTAssertEqual(game.gold, 100, "Choisir un trait, c'est renoncer à la bourse.")
+
+        // Le trait hérité survit à un rechargement.
+        for key in ["debugReset", "debugGold", "debugTimeScale", "debugHero"] {
+            UserDefaults.standard.removeObject(forKey: key)
+        }
+        XCTAssertEqual(GameState().traits, [.careful])
+    }
+
+    func testTraitLegacyIsInherited() {
+        // Trois fuites donnent le trait Prudent ; on le simule par une lignée : pas d'accès direct aux
+        // compteurs, donc on vérifie au moins que le legs d'un trait inconnu est refusé.
+        let game = makeGame(gold: 400); game.chooseHero(.warrior)
+        game.chooseHero(.mage)
+        game.chooseLegacy(.trait(.brave))   // pas dans l'offre : ignoré
+        XCTAssertNotNil(game.pendingLegacy, "Un legs qui n'est pas proposé ne se choisit pas.")
+        XCTAssertTrue(game.traits.isEmpty)
+    }
+
+    // MARK: Économie
+
+    func testLootResellsForAThirdOfItsValue() {
+        var generator = SeededGenerator(state: 7)
+        let item = Item.random(tier: 3, rank: 2, hero: .warrior, using: &generator)
+        XCTAssertEqual(item.resaleValue, (item.sellValue * Item.resaleShare).rounded(.up))
+        XCTAssertLessThan(item.resaleValue, item.sellValue, "Le marchand ne rend qu'une part de la valeur.")
+        XCTAssertGreaterThan(item.forgePrice, item.resaleValue * 9, "La forge reste indexée sur la valeur pleine.")
+    }
+
+    func testGoldGrowsSlowerThanMonstersWithRank() {
+        XCTAssertEqual(Dungeon.goldRankScale(1), 1)
+        XCTAssertLessThan(Dungeon.goldRankScale(5), Dungeon.rankScale(5), "Au rang 5, l'or suit moins vite que le danger.")
+    }
+
+    func testPricesFollowTheShopTier() {
+        let game = makeGame(); game.chooseHero(.warrior)
+        XCTAssertEqual(game.price(of: .potion), 45)
+        XCTAssertEqual(game.price(of: .ration), 25)
+        XCTAssertEqual(game.questReward, 25)
+        let far = makeGame(unlock: true); far.chooseHero(.warrior)
+        XCTAssertEqual(far.price(of: .potion), 45 * 27, "Au quatrième palier, les prix sont multipliés par 27.")
+    }
+
+    // MARK: Reliques
+
+    func testRelicGivesItsBoonAndItsBane() {
+        let plain = makeGame(); plain.chooseHero(.warrior)
+        let glass = makeGame(relic: "glassBlade"); glass.chooseHero(.warrior)
+        XCTAssertTrue(glass.has(.glassBlade))
+        XCTAssertEqual(glass.attack, (plain.attack * Relic.glassAttack).rounded(), "+20 % d'attaque.")
+        XCTAssertEqual(glass.maxHP, (plain.maxHP * Relic.glassHP).rounded(), "-10 % de PV max.")
+        XCTAssertLessThanOrEqual(glass.hp, glass.maxHP)
+    }
+
+    func testMoonCharmFollowsTheHour() {
+        let day = makeGame(relic: "moonCharm"); day.chooseHero(.warrior)
+        let dayAttack = day.attack
+        let night = makeGame(night: true, relic: "moonCharm"); night.chooseHero(.warrior)
+        XCTAssertGreaterThan(night.attack, dayAttack, "L'amulette de lune frappe plus fort la nuit.")
+    }
+
+    // MARK: Cimetière et héritage
+
+    func testDeathLeavesAGraveAndALegacyToChoose() {
+        let game = makeGame(gold: 1_000, relic: "ember"); game.chooseHero(.warrior)
+        game.rename("Bjorn")
+        game.chooseHero(.mage)   // abandon : mort définitive
+
+        XCTAssertEqual(game.graves.count, 1)
+        XCTAssertEqual(game.graves.first?.name, "Bjorn")
+        XCTAssertEqual(game.graves.first?.heroClass, .warrior)
+        XCTAssertEqual(game.graves.first?.relics, [.ember])
+        XCTAssertTrue(game.relics.isEmpty, "Les reliques reposent avec lui, sauf celle qu'on choisit.")
+        XCTAssertEqual(game.gold, 250)
+        XCTAssertEqual(game.pendingLegacy?.options, [.relic(.ember), .purse(250)])
+
+        game.chooseLegacy(.relic(.ember))
+        XCTAssertTrue(game.has(.ember), "La relique léguée passe au successeur.")
+        XCTAssertNil(game.pendingLegacy, "Un seul legs.")
+        XCTAssertEqual(game.gold, 250, "Choisir la relique, c'est renoncer à la bourse.")
+        XCTAssertEqual(game.graves.first?.legacy, Relic.ember.name)
+    }
+
+    func testPurseLegacyDoublesTheInheritance() {
+        let game = makeGame(gold: 1_000); game.chooseHero(.warrior)
+        game.chooseHero(.archer)
+        game.chooseLegacy(.purse(250))
+        XCTAssertEqual(game.gold, 500)
+    }
+
+    func testGraveyardSurvivesReload() {
+        let first = makeGame(gold: 400); first.chooseHero(.warrior)
+        first.chooseHero(.mage)
+        for key in ["debugReset", "debugGold", "debugTimeScale", "debugHero"] {
+            UserDefaults.standard.removeObject(forKey: key)
+        }
+        let second = GameState()
+        XCTAssertEqual(second.graves.count, 1)
+        XCTAssertEqual(second.pendingLegacy?.purse, 100)
+    }
+
+    // MARK: Visiteurs du camp
+
+    func testVisitsAreTheSameForAGivenDay() {
+        let visits = CampVisit.visits(onDay: 9_500)
+        XCTAssertEqual(visits.count, 2)
+        XCTAssertEqual(visits, CampVisit.visits(onDay: 9_500), "Tirées d'après la date seule.")
+        for visit in visits {
+            XCTAssertEqual(visit.end.timeIntervalSince(visit.start), CampVisit.stay * 3_600, accuracy: 0.01)
+            XCTAssertEqual(CampVisit.current(at: visit.start.addingTimeInterval(60)), visit)
+        }
+        XCTAssertNil(CampVisit.current(at: Ambient.date(day: 9_500, hour: 2)), "Personne ne passe en pleine nuit.")
+    }
+
+    func testAnsweringAVisitorEndsTheVisit() {
+        let game = makeGame(gold: 100, visitor: "pilgrim"); game.chooseHero(.warrior)
+        guard let visit = game.visitor else { return XCTFail("Le pèlerin devrait être au camp.") }
+        XCTAssertEqual(visit.kind, .pilgrim)
+        let before = game.mood
+        game.answerVisit(visit, option: 2)   // écouter ses récits
+        XCTAssertEqual(game.mood, min(before + 12, 100), accuracy: 0.001)
+        XCTAssertNotEqual(game.visitor?.id, visit.id, "Une seule réponse par visite.")
+        XCTAssertNotNil(game.visitOutcome)
+    }
+
+    func testVisitorOfferingBlessesTheNextDungeon() {
+        let game = makeGame(gold: 100, visitor: "pilgrim"); game.chooseHero(.warrior)
+        guard let visit = game.visitor else { return XCTFail("Le pèlerin devrait être au camp.") }
+        game.answerVisit(visit, option: 0)
+        XCTAssertTrue(game.scrollReady)
+        XCTAssertEqual(game.gold, 60, "L'offrande coûte 40 or au premier palier.")
+    }
+
+    func testNoVisitorWhileAway() {
+        let game = makeGame(visitor: "merchant"); game.chooseHero(.warrior)
+        XCTAssertNotNil(game.visitor)
+        game.travel(to: .shop)
+        XCTAssertNil(game.visitor, "Le visiteur ne trouve personne si le héros est parti.")
     }
 
     // MARK: Pièges
