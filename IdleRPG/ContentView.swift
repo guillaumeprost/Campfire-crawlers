@@ -28,7 +28,13 @@ struct ContentView: View {
 
     /// Largeur du panneau latéral en paysage.
     private static let sidePanel: CGFloat = 370
-    @State private var landscape = false
+    /// Connu dès le lancement : sinon le panneau du portrait s'ouvre un instant par-dessus le paysage.
+    @State private var landscape = ContentView.startsInLandscape
+
+    private static var startsInLandscape: Bool {
+        let scene = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first
+        return scene?.effectiveGeometry.interfaceOrientation.isLandscape ?? false
+    }
     /// En paysage, l'île dynamique est-elle du côté du panneau ? Sinon il peut se coller au bord.
     @State private var islandOnRight = false
     @State private var safeTrailing: CGFloat = 0

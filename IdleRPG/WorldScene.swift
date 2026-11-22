@@ -329,13 +329,18 @@ final class WorldScene: SKScene {
     // MARK: - Géométrie
 
     private var heroPosition: CGPoint { CGPoint(x: playWidth * heroSlot, y: feetY) }
-    private var encounterPosition: CGPoint { CGPoint(x: playWidth * 0.72, y: feetY) }
+    /// En portrait le monstre se tient plus près du héros : contre le bord droit, lui et sa jauge
+    /// passeraient sous les boutons de combat.
+    private var encounterPosition: CGPoint { CGPoint(x: playWidth * (isPortrait ? 0.60 : 0.72), y: feetY) }
 
     /// Ligne où les personnages posent les pieds : elle suit le sol de la scène peinte.
     private var feetY: CGFloat = 22
     /// Part de la hauteur visible gardée comme sol sous les pieds, pour les scènes qui
     /// défilent. Plus c'est petit, plus les personnages descendent vers le bord bas.
     private static let scrollForeground: CGFloat = 0.09
+    /// Hauteur minimale des pieds au-dessus du bas réservé en portrait, en points : le panneau
+    /// replié dépasse ce bas d'environ 74 points (son recouvrement, plus la marge basse de l'écran).
+    private static let portraitFeetClearance: CGFloat = 96
     private var backdropSize = CGSize(width: 1, height: 1)
     private var backdropScale: CGFloat = 1
     /// Les personnages suivent la taille de la scène peinte : plus la vue est grande, plus ils grandissent.
@@ -428,7 +433,11 @@ final class WorldScene: SKScene {
             let extra = bottomInset <= 0 && scene.floor > 0
                 ? max(band - Self.scrollForeground * visible, 0) / scene.floor : 0
             let drawn = visible + extra
-            groundY = bottomInset - extra
+            // Portrait : le panneau replié recouvre le bas du décor. Quand le sol peint est trop
+            // bas (le Volcan), on remonte l'image pour que les pieds restent au-dessus de lui ;
+            // le reflet sous le décor comble le vide, caché derrière le panneau.
+            let lift = bottomInset > 0 ? max(Self.portraitFeetClearance - band, 0) : 0
+            groundY = bottomInset - extra + lift
             backdropScale = drawn / max(source.height, 1)
             backdrop.configure(texture: texture, height: drawn, sceneWidth: size.width, mirror: false)
             backdrop.position = CGPoint(x: 0, y: groundY)
@@ -1114,7 +1123,8 @@ final class WorldScene: SKScene {
                                                 color: boss ? .systemYellow : .white)
         // Au-dessus du monstre, sans monter sous l'en-tête posé en haut de la scène.
         let barTop = feetY + encounterLift + node.size.height + 24
-        hpBar.position = CGPoint(x: min(encounterPosition.x, playWidth - 74), y: min(barTop, size.height - 120))
+        // La jauge s'arrête avant les boutons de combat, rangés contre le bord droit de la zone libre.
+        hpBar.position = CGPoint(x: min(encounterPosition.x, playWidth - 147), y: min(barTop, size.height - 120))
         hpBar.isHidden = false
         if boss { showBanner("BOSS !") }
     }
