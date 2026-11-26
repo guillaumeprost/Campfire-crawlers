@@ -166,6 +166,8 @@ final class GameState {
     /// Repère qui relie l'horloge du jeu à la date : il donne l'heure et la météo de n'importe quel instant.
     @ObservationIgnored private var anchorDate = Date()
     @ObservationIgnored private var anchorClock: TimeInterval = 0
+    /// Le vrai ciel du joueur, s'il partage sa position : soleil et météo relevée (voir `SkyWatcher`).
+    private(set) var sky = Sky()
     #if DEBUG
     @ObservationIgnored private var debugVisitor: VisitorKind?
     /// Partagé avec la copie qui prévoit la suite, pour qu'elle voie le même temps figé.
@@ -248,10 +250,14 @@ final class GameState {
         debugVisitor = defaults.string(forKey: "debugVisitor").flatMap(VisitorKind.init(rawValue:))
         Self.debugAmbient = nil
         if defaults.string(forKey: "debugWeather") != nil || defaults.object(forKey: "debugNight") != nil {
-            let real = Ambient.at(Date())
+            let real = Ambient.at(Date(), sky: sky)
             Self.debugAmbient = Ambient(
                 night: defaults.object(forKey: "debugNight") != nil ? defaults.bool(forKey: "debugNight") : real.night,
                 weather: defaults.string(forKey: "debugWeather").flatMap(Weather.init(rawValue:)) ?? real.weather)
+        }
+        // Tests : `-debugSky 48.85,2.35` place le joueur à cet endroit, sans demander sa position.
+        if let spot = defaults.string(forKey: "debugSky")?.split(separator: ",").compactMap({ Double($0) }), spot.count == 2 {
+            sky = Sky(latitude: spot[0], longitude: spot[1])
         }
         if let relic = defaults.string(forKey: "debugRelic").flatMap(Relic.init(rawValue:)), !relics.contains(relic) {
             relics.append(relic)
@@ -334,7 +340,7 @@ final class GameState {
         #if DEBUG
         if let frozen = Self.debugAmbient { return frozen }
         #endif
-        return Ambient.at(gameDate(at: time))
+        return Ambient.at(gameDate(at: time), sky: sky)
     }
 
     /// Pour les règles : l'ambiance à l'instant exact de la simulation.
@@ -342,8 +348,35 @@ final class GameState {
     /// Pour l'interface : suit l'horloge rafraîchie plusieurs fois par seconde.
     var ambient: Ambient { ambient(at: uiClock) }
 
-    /// Le temps se coupe à chaque heure pile : jour, nuit et météo ne changent qu'à ce moment-là.
-    private var ambientEventTime: TimeInterval { clock + Ambient.untilNextHour(gameDate(at: clock)) }
+    /// Le temps se coupe à chaque heure pile, et au lever et au coucher du soleil : jour, nuit et
+    /// météo ne changent qu'à ces moments-là.
+    private var ambientEventTime: TimeInterval { clock + Ambient.untilNextChange(gameDate(at: clock), sky: sky) }
+
+    /// Le soleil et la météo affichés sont-ils ceux de dehors ?
+    var followsRealSun: Bool { sky.followsSun }
+    var followsRealWeather: Bool { sky.hours[Sky.hourKey(gameDate(at: uiClock))] != nil }
+
+    /// Un nouveau relevé du ciel est arrivé. Le passé garde son temps ; la suite est replanifiée.
+    func updateSky(_ fresh: Sky) {
+        guard !isForecast else { return }
+        settleRest()
+        sky.adopt(fresh, from: gameDate(at: clock))
+        chanceCache.removeAll()
+        refreshUI()
+        replan()
+        save()
+    }
+
+    /// Le joueur ne partage plus sa position : le ciel redevient imaginaire.
+    func forgetSky() {
+        guard !isForecast, sky != Sky() else { return }
+        settleRest()
+        sky = Sky()
+        chanceCache.removeAll()
+        refreshUI()
+        replan()
+        save()
+    }
 
     /// Repos au feu de camp selon l'heure et le temps : on dort mieux la nuit, moins bien sous la pluie
     /// (sauf avec la braise éternelle, qui ne s'éteint jamais).
@@ -902,7 +935,7 @@ final class GameState {
     private func odds(of dungeon: Dungeon, rank: Int) -> (success: Double, death: Double) {
         let key = "\(dungeon.id).\(rank).\(level).\(Int(hp)).\(Int(energy)).\(potions).\(scrollReady).\(attack).\(maxHP)"
             + ".\(Int(hunger / 25)).\(Int(thirst / 25)).\(injured).\(Int(escapeChance() * 100)).\(Int(armorFactor * 100))"
-            + ".\(relics.map(\.rawValue).joined()).\(Ambient.hourIndex(gameDate(at: clock)))"
+            + ".\(relics.map(\.rawValue).joined()).\(Ambient.hourIndex(gameDate(at: clock))).\(ambientNow.night)"
         if let known = chanceCache[key] { return known }
         var generator = SeededGenerator(state: UInt64(dungeon.id * 7_919 + rank * 104_729))
         let trials = 60
@@ -1151,7 +1184,7 @@ final class GameState {
         var time = clock, left = thirst - level
         for _ in 0..<240 where left > 0 {
             let rate = base * (isExploring ? 1 : ambient(at: time).weather.thirstFactor)
-            let span = Ambient.untilNextHour(gameDate(at: time))
+            let span = Ambient.untilNextChange(gameDate(at: time), sky: sky)
             if left <= rate * span { return time + left / rate }
             left -= rate * span
             time += span
@@ -2778,6 +2811,8 @@ final class GameState {
         var fightsAtBirth: Int?
         var anchorDate: Date?
         var anchorClock: TimeInterval?
+        /// Absent tant que le joueur n'a pas partagé sa position.
+        var sky: Sky?
     }
 
     private func snapshot() -> SaveData {
@@ -2796,7 +2831,7 @@ final class GameState {
             activeCompanion: activeCompanion, unlockedCompanions: Array(unlockedCompanions),
             relics: relics, inheritedTraits: inheritedTraits, graves: graves, pendingLegacy: pendingLegacy,
             answeredVisits: answeredVisits, heroBorn: heroBorn, fightsAtBirth: fightsAtBirth,
-            anchorDate: anchorDate, anchorClock: anchorClock
+            anchorDate: anchorDate, anchorClock: anchorClock, sky: sky == Sky() ? nil : sky
         )
     }
 
@@ -2885,6 +2920,7 @@ final class GameState {
         // Sans repère sauvegardé, l'heure du jeu part de celle du dernier passage.
         anchorDate = data.anchorDate ?? data.lastTick
         anchorClock = data.anchorClock ?? data.clock
+        sky = data.sky ?? Sky()
         hp = min(hp, maxHP)
     }
 

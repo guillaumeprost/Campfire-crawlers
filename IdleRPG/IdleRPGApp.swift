@@ -30,8 +30,10 @@ struct IdleRPGApp: App {
             case .active:
                 game.resume()
                 Outreach.clearDelivered()
+                SkyWatcher.shared.watch(game)
             case .background, .inactive:
                 game.suspend()
+                SkyWatcher.shared.rest()
             @unknown default:
                 break
             }

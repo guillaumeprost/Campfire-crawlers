@@ -358,7 +358,7 @@ final class WorldScene: SKScene {
         let scrolls: Bool
     }
 
-    /// Le camp s'éclaire le jour, de 7 h à 19 h à l'heure du téléphone.
+    /// Le camp s'éclaire le jour : du lever au coucher du soleil, ou de 7 h à 19 h sans position connue.
     static var isDaytime: Bool {
         if let ambient = shownAmbient { return !ambient.night }
         return !Ambient.isNight(Date())
@@ -547,7 +547,18 @@ final class WorldScene: SKScene {
         return texture
     }()
 
-    /// Pluie, brume, éclairs et pénombre de la nuit, par-dessus le décor quand le héros est dehors.
+    private static let flakeTexture: SKTexture = {
+        let size = CGSize(width: 3, height: 3)
+        let image = UIGraphicsImageRenderer(size: size).image { context in
+            UIColor.white.setFill()
+            context.fill(CGRect(origin: .zero, size: size))
+        }
+        let texture = SKTexture(image: image)
+        texture.filteringMode = .nearest
+        return texture
+    }()
+
+    /// Pluie, neige, brume, éclairs et pénombre de la nuit, par-dessus le décor quand le héros est dehors.
     private func buildWeather() {
         weatherLayer.removeAllChildren()
         weatherLayer.removeAllActions()
@@ -569,6 +580,37 @@ final class WorldScene: SKScene {
         switch ambient.weather {
         case .clear:
             break
+        case .cloudy:
+            // Un ciel bouché : la lumière baisse, sans rien qui tombe.
+            let gloom = SKSpriteNode(color: UIColor(red: 0.16, green: 0.19, blue: 0.26, alpha: 1), size: full.size)
+            gloom.anchorPoint = .zero
+            gloom.alpha = 0.16
+            gloom.zPosition = -0.5
+            weatherLayer.addChild(gloom)
+        case .snow:
+            let pale = SKSpriteNode(color: UIColor(red: 0.72, green: 0.78, blue: 0.88, alpha: 1), size: full.size)
+            pale.anchorPoint = .zero
+            pale.alpha = 0.14
+            pale.zPosition = -0.5
+            weatherLayer.addChild(pale)
+            // Des flocons carrés, lents, qui dérivent de travers.
+            let snow = SKEmitterNode()
+            snow.particleTexture = Self.flakeTexture
+            snow.particleBirthRate = 70
+            snow.particleLifetime = 9
+            snow.particleSpeed = 110
+            snow.particleSpeedRange = 50
+            snow.emissionAngle = -.pi / 2 - 0.25
+            snow.emissionAngleRange = 0.5
+            snow.xAcceleration = -6
+            snow.particleAlpha = 0.85
+            snow.particleAlphaRange = 0.3
+            snow.particleScale = 1
+            snow.particleScaleRange = 0.8
+            snow.position = CGPoint(x: size.width * 0.6, y: size.height + 10)
+            snow.particlePositionRange = CGVector(dx: size.width * 1.7, dy: 0)
+            snow.advanceSimulationTime(9)
+            weatherLayer.addChild(snow)
         case .fog:
             // Deux nappes pâles qui dérivent lentement en sens contraire.
             for (index, alpha) in [0.20, 0.14].enumerated() {

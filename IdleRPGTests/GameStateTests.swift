@@ -13,7 +13,7 @@ final class GameStateTests: XCTestCase {
     private let debugKeys = ["save.v2", "debugReset", "debugGold", "debugTimeScale",
                              "debugHero", "debugGo", "debugHeal", "debugSkill",
                              "debugWeather", "debugNight", "debugVisitor", "debugRelic",
-                             "debugLevel", "debugUnlock", "debugFeats"]
+                             "debugLevel", "debugUnlock", "debugFeats", "debugSky"]
 
     override func setUp() {
         super.setUp()
@@ -49,6 +49,85 @@ final class GameStateTests: XCTestCase {
         if unlock { d.set(true, forKey: "debugUnlock") }
         if feats { d.set(true, forKey: "debugFeats") }
         return GameState()
+    }
+
+    // MARK: Le vrai ciel
+
+    private func utc(_ year: Int, _ month: Int, _ day: Int, _ hour: Int, _ minute: Int) -> Date {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "UTC")!
+        return calendar.date(from: DateComponents(year: year, month: month, day: day, hour: hour, minute: minute))!
+    }
+
+    func testNightFollowsTheRealSun() {
+        // Paris, solstice d'été 2026 : lever à 3 h 47 TU, coucher à 19 h 58 TU.
+        let paris = Sky(latitude: 48.85, longitude: 2.35)
+        XCTAssertTrue(Ambient.isNight(utc(2026, 6, 21, 3, 40), sky: paris), "Sept minutes avant le lever, il fait nuit.")
+        XCTAssertFalse(Ambient.isNight(utc(2026, 6, 21, 3, 54), sky: paris), "Sept minutes après le lever, il fait jour.")
+        XCTAssertFalse(Ambient.isNight(utc(2026, 6, 21, 19, 51), sky: paris), "Sept minutes avant le coucher, il fait jour.")
+        XCTAssertTrue(Ambient.isNight(utc(2026, 6, 21, 20, 5), sky: paris), "Sept minutes après le coucher, il fait nuit.")
+        // Solstice d'hiver : lever à 7 h 41 TU, coucher à 15 h 56 TU.
+        XCTAssertTrue(Ambient.isNight(utc(2026, 12, 21, 7, 34), sky: paris))
+        XCTAssertFalse(Ambient.isNight(utc(2026, 12, 21, 7, 48), sky: paris))
+        XCTAssertFalse(Ambient.isNight(utc(2026, 12, 21, 15, 49), sky: paris))
+        XCTAssertTrue(Ambient.isNight(utc(2026, 12, 21, 16, 3), sky: paris))
+        // Au-delà du cercle polaire, le soleil de minuit ne se couche pas.
+        XCTAssertFalse(Ambient.isNight(utc(2026, 6, 21, 23, 0), sky: Sky(latitude: 69.65, longitude: 18.96)))
+    }
+
+    func testTimeIsCutAtSunriseAndSunset() {
+        let paris = Sky(latitude: 48.85, longitude: 2.35)
+        let before = utc(2026, 6, 21, 3, 10)
+        let wait = Ambient.untilNextChange(before, sky: paris)
+        XCTAssertEqual(wait, 37 * 60, accuracy: 120, "Le temps se coupe au lever du soleil, pas à l'heure pile.")
+        XCTAssertTrue(Ambient.isNight(before.addingTimeInterval(wait - 2), sky: paris))
+        XCTAssertFalse(Ambient.isNight(before.addingTimeInterval(wait), sky: paris), "À la coupure, le jour est déjà levé.")
+        XCTAssertEqual(Ambient.untilNextChange(before.addingTimeInterval(wait), sky: paris), 3_000 - wait, accuracy: 0.01,
+                       "Ensuite, on vise l'heure pile.")
+        XCTAssertEqual(Ambient.untilNextChange(before), 3_000, accuracy: 0.01, "Sans position, seules les heures comptent.")
+    }
+
+    func testRealWeatherReplacesTheImaginedOne() {
+        let noon = Ambient.date(day: 9_500, hour: 12)
+        var sky = Sky()
+        sky.hours[Sky.hourKey(noon)] = .snow
+        XCTAssertEqual(Ambient.weather(at: noon.addingTimeInterval(1_800), sky: sky), .snow, "L'heure relevée suit le vrai temps.")
+        XCTAssertEqual(Ambient.weather(at: noon.addingTimeInterval(3_600), sky: sky), Ambient.weather(at: noon.addingTimeInterval(3_600)),
+                       "Au-delà du relevé, le temps redevient imaginaire.")
+        // Un relevé plus récent ne réécrit pas les heures déjà jouées.
+        var fresh = Sky(latitude: 48.85, longitude: 2.35)
+        fresh.hours = [Sky.hourKey(noon) - 1: .storm, Sky.hourKey(noon): .rain, Sky.hourKey(noon) + 1: .fog]
+        sky.hours[Sky.hourKey(noon) - 1] = .clear
+        sky.adopt(fresh, from: noon.addingTimeInterval(600))
+        XCTAssertEqual(sky.hours[Sky.hourKey(noon) - 1], .clear)
+        XCTAssertEqual(sky.hours[Sky.hourKey(noon)], .rain)
+        XCTAssertEqual(sky.hours[Sky.hourKey(noon) + 1], .fog)
+        XCTAssertTrue(sky.followsSun)
+    }
+
+    func testForecastReplaysTheRecordedSky() {
+        // Sans temps figé : le jeu suit le ciel enregistré, et la prévision doit le rejouer à l'identique.
+        let game = makeGame(weather: nil, night: nil)
+        game.chooseHero(.warrior)
+        var sky = Sky(latitude: 48.85, longitude: 2.35)
+        let now = Sky.hourKey(game.gameDate(at: 0))
+        for hour in 0..<120 { sky.hours[now + hour] = hour % 2 == 0 ? .storm : .snow }
+        game.updateSky(sky)
+        XCTAssertTrue(game.followsRealSun)
+        XCTAssertTrue(game.followsRealWeather)
+        XCTAssertTrue([Weather.storm, .snow].contains(game.ambient.weather))
+        let start = Date()
+        game.tick(now: start)
+        game.travel(to: .dungeon(0))
+        guard let lands = game.forecast().landsAt else { return XCTFail("Pas d'arrivée prévue.") }
+        XCTAssertEqual(game.forecast().landsAt, lands, "Même ciel enregistré, même prévision.")
+        // Juste avant l'heure annoncée il est encore en route (ou mort en chemin) ; juste après, il est arrivé.
+        let wait = lands - game.clock
+        game.tick(now: start.addingTimeInterval(wait - 1))
+        let early = game.forecast().landsAt
+        XCTAssertTrue(early == nil || abs(early! - lands) < 0.01, "La partie suit le chemin prévu sous le ciel enregistré.")
+        game.tick(now: start.addingTimeInterval(wait + 2))
+        XCTAssertNil(game.forecast().landsAt, "À l'heure annoncée, le héros est arrivé.")
     }
 
     // MARK: Classes de héros

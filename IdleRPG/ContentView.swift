@@ -340,7 +340,7 @@ struct ContentView: View {
             ambientChip
             // En paysage une feuille couvrirait tout l'écran : le détail s'ouvre en carte sous la pastille.
             if landscape && showAmbient {
-                AmbientCard(ambient: game.ambient, shelteredRest: game.has(.ember), compact: true) {
+                AmbientCard(game: game, ambient: game.ambient, shelteredRest: game.has(.ember), compact: true) {
                     withAnimation(.snappy) { showAmbient = false }
                 }
                 .frame(width: 330)
@@ -375,7 +375,7 @@ struct ContentView: View {
         .accessibilityHint("Voir les effets de l'heure et de la météo")
         // Une feuille, comme la fiche du héros : un popover ferait disparaître le panneau du bas.
         .sheet(isPresented: Binding(get: { showAmbient && !landscape }, set: { showAmbient = $0 })) {
-            AmbientCard(ambient: game.ambient, shelteredRest: game.has(.ember)) { showAmbient = false }
+            AmbientCard(game: game, ambient: game.ambient, shelteredRest: game.has(.ember)) { showAmbient = false }
                 .presentationDetents([.height(300), .medium])
                 .preferredColorScheme(.dark)
         }
@@ -1102,6 +1102,7 @@ struct RelicLine: View {
 
 /// Détail de l'heure et de la météo : ce qu'elles changent pour le héros.
 private struct AmbientCard: View {
+    let game: GameState
     let ambient: Ambient
     /// La braise éternelle protège le feu de la pluie.
     let shelteredRest: Bool
@@ -1141,14 +1142,39 @@ private struct AmbientCard: View {
                     .font(compact ? .footnote : .subheadline)
                     .labelStyle(BulletLabel())
             }
-            Text("Le temps change toutes les trois heures. Sous terre, seule la nuit compte.")
+            Text(source)
                 .font(.caption2)
                 .foregroundStyle(.secondary)
                 .padding(.top, 2)
+            if game.followsRealWeather, let attribution = SkyWatcher.shared.attribution {
+                // Mention exigée par Apple dès que sa météo est affichée.
+                HStack(spacing: 10) {
+                    AsyncImage(url: attribution.combinedMarkDarkURL) { $0.resizable().scaledToFit() } placeholder: { Color.clear }
+                        .frame(height: 12)
+                    Link("Sources des données", destination: attribution.legalPageURL)
+                        .font(.caption2)
+                }
+            } else if !game.followsRealSun {
+                Button(SkyWatcher.shared.access == .refused ? "Autoriser la position dans Réglages" : "Suivre le vrai ciel") {
+                    SkyWatcher.shared.ask()
+                }
+                .font(.footnote.weight(.semibold))
+                .buttonStyle(.glass)
+            }
         }
         .padding(compact ? 14 : 22)
         .frame(maxWidth: .infinity, maxHeight: compact ? nil : .infinity, alignment: .topLeading)
         .foregroundStyle(.white)
+    }
+
+    /// D'où vient le ciel affiché : celui de dehors, ou un ciel imaginaire.
+    private var source: String {
+        let underground = "Sous terre, seule la nuit compte."
+        if game.followsRealWeather { return "Le soleil et la météo sont ceux de dehors, là où vous êtes. " + underground }
+        if game.followsRealSun {
+            return "Le soleil se lève et se couche comme dehors. La météo n'a pas pu être relevée : elle est imaginaire pour l'instant. " + underground
+        }
+        return "Ciel imaginaire : jour de 7 h à 19 h, temps qui tourne toutes les trois heures. Partagez votre position approximative pour suivre le vrai. " + underground
     }
 }
 
