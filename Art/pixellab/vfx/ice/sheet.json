@@ -1,0 +1,287 @@
+{
+ "frames": [
+  {
+   "filename": "cc-ice 0.png",
+   "frame": {
+    "x": 0,
+    "y": 0,
+    "w": 80,
+    "h": 96
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 80,
+    "h": 96
+   },
+   "sourceSize": {
+    "w": 80,
+    "h": 96
+   },
+   "pivot": {
+    "x": 0.4875,
+    "y": 0.3645833333333333
+   },
+   "duration": 83
+  },
+  {
+   "filename": "cc-ice 1.png",
+   "frame": {
+    "x": 80,
+    "y": 0,
+    "w": 80,
+    "h": 96
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 80,
+    "h": 96
+   },
+   "sourceSize": {
+    "w": 80,
+    "h": 96
+   },
+   "pivot": {
+    "x": 0.4875,
+    "y": 0.3645833333333333
+   },
+   "duration": 83
+  },
+  {
+   "filename": "cc-ice 2.png",
+   "frame": {
+    "x": 160,
+    "y": 0,
+    "w": 80,
+    "h": 96
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 80,
+    "h": 96
+   },
+   "sourceSize": {
+    "w": 80,
+    "h": 96
+   },
+   "pivot": {
+    "x": 0.4875,
+    "y": 0.3645833333333333
+   },
+   "duration": 83
+  },
+  {
+   "filename": "cc-ice 3.png",
+   "frame": {
+    "x": 240,
+    "y": 0,
+    "w": 80,
+    "h": 96
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 80,
+    "h": 96
+   },
+   "sourceSize": {
+    "w": 80,
+    "h": 96
+   },
+   "pivot": {
+    "x": 0.4875,
+    "y": 0.3645833333333333
+   },
+   "duration": 83
+  },
+  {
+   "filename": "cc-ice 4.png",
+   "frame": {
+    "x": 0,
+    "y": 96,
+    "w": 80,
+    "h": 96
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 80,
+    "h": 96
+   },
+   "sourceSize": {
+    "w": 80,
+    "h": 96
+   },
+   "pivot": {
+    "x": 0.4875,
+    "y": 0.3645833333333333
+   },
+   "duration": 83
+  },
+  {
+   "filename": "cc-ice 5.png",
+   "frame": {
+    "x": 80,
+    "y": 96,
+    "w": 80,
+    "h": 96
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 80,
+    "h": 96
+   },
+   "sourceSize": {
+    "w": 80,
+    "h": 96
+   },
+   "pivot": {
+    "x": 0.4875,
+    "y": 0.3645833333333333
+   },
+   "duration": 83
+  },
+  {
+   "filename": "cc-ice 6.png",
+   "frame": {
+    "x": 160,
+    "y": 96,
+    "w": 80,
+    "h": 96
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 80,
+    "h": 96
+   },
+   "sourceSize": {
+    "w": 80,
+    "h": 96
+   },
+   "pivot": {
+    "x": 0.4875,
+    "y": 0.3645833333333333
+   },
+   "duration": 83
+  },
+  {
+   "filename": "cc-ice 7.png",
+   "frame": {
+    "x": 240,
+    "y": 96,
+    "w": 80,
+    "h": 96
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 80,
+    "h": 96
+   },
+   "sourceSize": {
+    "w": 80,
+    "h": 96
+   },
+   "pivot": {
+    "x": 0.4875,
+    "y": 0.3645833333333333
+   },
+   "duration": 83
+  },
+  {
+   "filename": "cc-ice 8.png",
+   "frame": {
+    "x": 0,
+    "y": 192,
+    "w": 80,
+    "h": 96
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 80,
+    "h": 96
+   },
+   "sourceSize": {
+    "w": 80,
+    "h": 96
+   },
+   "pivot": {
+    "x": 0.4875,
+    "y": 0.3645833333333333
+   },
+   "duration": 83
+  },
+  {
+   "filename": "cc-ice 9.png",
+   "frame": {
+    "x": 80,
+    "y": 192,
+    "w": 80,
+    "h": 96
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 80,
+    "h": 96
+   },
+   "sourceSize": {
+    "w": 80,
+    "h": 96
+   },
+   "pivot": {
+    "x": 0.4875,
+    "y": 0.3645833333333333
+   },
+   "duration": 83
+  }
+ ],
+ "meta": {
+  "app": "PixelLab VFX Creator",
+  "image": "cc-ice.png",
+  "format": "RGBA8888",
+  "size": {
+   "w": 320,
+   "h": 288
+  },
+  "scale": "1",
+  "anchor": {
+   "kind": "origin",
+   "x": 39,
+   "y": 35
+  },
+  "frameTags": [
+   {
+    "name": "cc-ice",
+    "from": 0,
+    "to": 9,
+    "direction": "forward"
+   }
+  ]
+ }
+}

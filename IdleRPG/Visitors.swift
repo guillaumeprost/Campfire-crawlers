@@ -6,7 +6,7 @@ import Foundation
 /// (jamais avec le générateur de la partie) : la prévision du retour du héros reste exacte.
 /// Un visiteur ne fait rien tout seul : c'est le joueur qui décide quoi en faire.
 enum VisitorKind: String, CaseIterable {
-    case merchant, wounded, gambler, pilgrim, stray
+    case merchant, wounded, gambler, pilgrim, stray, minstrel, herbalist
 
     var name: String {
         switch self {
@@ -15,6 +15,8 @@ enum VisitorKind: String, CaseIterable {
         case .gambler: "Joueur de dés"
         case .pilgrim: "Pèlerin"
         case .stray: "Animal égaré"
+        case .minstrel: "Ménestrel"
+        case .herbalist: "Herboriste"
         }
     }
 
@@ -25,6 +27,8 @@ enum VisitorKind: String, CaseIterable {
         case .gambler: "Il fait rouler deux dés d'os dans sa paume et propose une partie."
         case .pilgrim: "Il s'assoit sans un mot, bénit les flammes, puis sourit."
         case .stray: "Une bête maigre rôde à la lisière de la lumière, attirée par l'odeur du repas."
+        case .minstrel: "Il accorde son luth près du feu et demande s'il peut jouer quelque chose."
+        case .herbalist: "Son panier déborde de plantes. Elle le pose près du feu et trie sa cueillette."
         }
     }
 
@@ -35,6 +39,8 @@ enum VisitorKind: String, CaseIterable {
         case .gambler: "dice.fill"
         case .pilgrim: "hands.and.sparkles.fill"
         case .stray: "pawprint.fill"
+        case .minstrel: "music.note"
+        case .herbalist: "leaf.fill"
         }
     }
 
@@ -46,6 +52,8 @@ enum VisitorKind: String, CaseIterable {
         case .gambler: "Un joueur de dés au camp"
         case .pilgrim: "Un pèlerin s'invite au feu"
         case .stray: "Une bête rôde près du feu"
+        case .minstrel: "Un ménestrel s'installe au feu"
+        case .herbalist: "Une herboriste passe au camp"
         }
     }
 }

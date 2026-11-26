@@ -1,0 +1,339 @@
+{
+ "frames": [
+  {
+   "filename": "cc-levelup 0.png",
+   "frame": {
+    "x": 0,
+    "y": 0,
+    "w": 70,
+    "h": 117
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 70,
+    "h": 117
+   },
+   "sourceSize": {
+    "w": 70,
+    "h": 117
+   },
+   "pivot": {
+    "x": 0.5,
+    "y": 0.8717948717948718
+   },
+   "duration": 83
+  },
+  {
+   "filename": "cc-levelup 1.png",
+   "frame": {
+    "x": 70,
+    "y": 0,
+    "w": 70,
+    "h": 117
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 70,
+    "h": 117
+   },
+   "sourceSize": {
+    "w": 70,
+    "h": 117
+   },
+   "pivot": {
+    "x": 0.5,
+    "y": 0.8717948717948718
+   },
+   "duration": 83
+  },
+  {
+   "filename": "cc-levelup 2.png",
+   "frame": {
+    "x": 140,
+    "y": 0,
+    "w": 70,
+    "h": 117
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 70,
+    "h": 117
+   },
+   "sourceSize": {
+    "w": 70,
+    "h": 117
+   },
+   "pivot": {
+    "x": 0.5,
+    "y": 0.8717948717948718
+   },
+   "duration": 83
+  },
+  {
+   "filename": "cc-levelup 3.png",
+   "frame": {
+    "x": 210,
+    "y": 0,
+    "w": 70,
+    "h": 117
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 70,
+    "h": 117
+   },
+   "sourceSize": {
+    "w": 70,
+    "h": 117
+   },
+   "pivot": {
+    "x": 0.5,
+    "y": 0.8717948717948718
+   },
+   "duration": 83
+  },
+  {
+   "filename": "cc-levelup 4.png",
+   "frame": {
+    "x": 0,
+    "y": 117,
+    "w": 70,
+    "h": 117
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 70,
+    "h": 117
+   },
+   "sourceSize": {
+    "w": 70,
+    "h": 117
+   },
+   "pivot": {
+    "x": 0.5,
+    "y": 0.8717948717948718
+   },
+   "duration": 83
+  },
+  {
+   "filename": "cc-levelup 5.png",
+   "frame": {
+    "x": 70,
+    "y": 117,
+    "w": 70,
+    "h": 117
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 70,
+    "h": 117
+   },
+   "sourceSize": {
+    "w": 70,
+    "h": 117
+   },
+   "pivot": {
+    "x": 0.5,
+    "y": 0.8717948717948718
+   },
+   "duration": 83
+  },
+  {
+   "filename": "cc-levelup 6.png",
+   "frame": {
+    "x": 140,
+    "y": 117,
+    "w": 70,
+    "h": 117
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 70,
+    "h": 117
+   },
+   "sourceSize": {
+    "w": 70,
+    "h": 117
+   },
+   "pivot": {
+    "x": 0.5,
+    "y": 0.8717948717948718
+   },
+   "duration": 83
+  },
+  {
+   "filename": "cc-levelup 7.png",
+   "frame": {
+    "x": 210,
+    "y": 117,
+    "w": 70,
+    "h": 117
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 70,
+    "h": 117
+   },
+   "sourceSize": {
+    "w": 70,
+    "h": 117
+   },
+   "pivot": {
+    "x": 0.5,
+    "y": 0.8717948717948718
+   },
+   "duration": 83
+  },
+  {
+   "filename": "cc-levelup 8.png",
+   "frame": {
+    "x": 0,
+    "y": 234,
+    "w": 70,
+    "h": 117
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 70,
+    "h": 117
+   },
+   "sourceSize": {
+    "w": 70,
+    "h": 117
+   },
+   "pivot": {
+    "x": 0.5,
+    "y": 0.8717948717948718
+   },
+   "duration": 83
+  },
+  {
+   "filename": "cc-levelup 9.png",
+   "frame": {
+    "x": 70,
+    "y": 234,
+    "w": 70,
+    "h": 117
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 70,
+    "h": 117
+   },
+   "sourceSize": {
+    "w": 70,
+    "h": 117
+   },
+   "pivot": {
+    "x": 0.5,
+    "y": 0.8717948717948718
+   },
+   "duration": 83
+  },
+  {
+   "filename": "cc-levelup 10.png",
+   "frame": {
+    "x": 140,
+    "y": 234,
+    "w": 70,
+    "h": 117
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 70,
+    "h": 117
+   },
+   "sourceSize": {
+    "w": 70,
+    "h": 117
+   },
+   "pivot": {
+    "x": 0.5,
+    "y": 0.8717948717948718
+   },
+   "duration": 83
+  },
+  {
+   "filename": "cc-levelup 11.png",
+   "frame": {
+    "x": 210,
+    "y": 234,
+    "w": 70,
+    "h": 117
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 70,
+    "h": 117
+   },
+   "sourceSize": {
+    "w": 70,
+    "h": 117
+   },
+   "pivot": {
+    "x": 0.5,
+    "y": 0.8717948717948718
+   },
+   "duration": 83
+  }
+ ],
+ "meta": {
+  "app": "PixelLab VFX Creator",
+  "image": "cc-levelup.png",
+  "format": "RGBA8888",
+  "size": {
+   "w": 280,
+   "h": 351
+  },
+  "scale": "1",
+  "anchor": {
+   "kind": "origin",
+   "x": 35,
+   "y": 102
+  },
+  "frameTags": [
+   {
+    "name": "cc-levelup",
+    "from": 0,
+    "to": 11,
+    "direction": "forward"
+   }
+  ]
+ }
+}

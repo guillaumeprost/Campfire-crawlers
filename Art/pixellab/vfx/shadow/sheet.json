@@ -1,0 +1,287 @@
+{
+ "frames": [
+  {
+   "filename": "cc-shadow 0.png",
+   "frame": {
+    "x": 0,
+    "y": 0,
+    "w": 70,
+    "h": 67
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 70,
+    "h": 67
+   },
+   "sourceSize": {
+    "w": 70,
+    "h": 67
+   },
+   "pivot": {
+    "x": 0.4857142857142857,
+    "y": 0.5074626865671642
+   },
+   "duration": 63
+  },
+  {
+   "filename": "cc-shadow 1.png",
+   "frame": {
+    "x": 70,
+    "y": 0,
+    "w": 70,
+    "h": 67
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 70,
+    "h": 67
+   },
+   "sourceSize": {
+    "w": 70,
+    "h": 67
+   },
+   "pivot": {
+    "x": 0.4857142857142857,
+    "y": 0.5074626865671642
+   },
+   "duration": 63
+  },
+  {
+   "filename": "cc-shadow 2.png",
+   "frame": {
+    "x": 140,
+    "y": 0,
+    "w": 70,
+    "h": 67
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 70,
+    "h": 67
+   },
+   "sourceSize": {
+    "w": 70,
+    "h": 67
+   },
+   "pivot": {
+    "x": 0.4857142857142857,
+    "y": 0.5074626865671642
+   },
+   "duration": 63
+  },
+  {
+   "filename": "cc-shadow 3.png",
+   "frame": {
+    "x": 210,
+    "y": 0,
+    "w": 70,
+    "h": 67
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 70,
+    "h": 67
+   },
+   "sourceSize": {
+    "w": 70,
+    "h": 67
+   },
+   "pivot": {
+    "x": 0.4857142857142857,
+    "y": 0.5074626865671642
+   },
+   "duration": 63
+  },
+  {
+   "filename": "cc-shadow 4.png",
+   "frame": {
+    "x": 0,
+    "y": 67,
+    "w": 70,
+    "h": 67
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 70,
+    "h": 67
+   },
+   "sourceSize": {
+    "w": 70,
+    "h": 67
+   },
+   "pivot": {
+    "x": 0.4857142857142857,
+    "y": 0.5074626865671642
+   },
+   "duration": 63
+  },
+  {
+   "filename": "cc-shadow 5.png",
+   "frame": {
+    "x": 70,
+    "y": 67,
+    "w": 70,
+    "h": 67
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 70,
+    "h": 67
+   },
+   "sourceSize": {
+    "w": 70,
+    "h": 67
+   },
+   "pivot": {
+    "x": 0.4857142857142857,
+    "y": 0.5074626865671642
+   },
+   "duration": 63
+  },
+  {
+   "filename": "cc-shadow 6.png",
+   "frame": {
+    "x": 140,
+    "y": 67,
+    "w": 70,
+    "h": 67
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 70,
+    "h": 67
+   },
+   "sourceSize": {
+    "w": 70,
+    "h": 67
+   },
+   "pivot": {
+    "x": 0.4857142857142857,
+    "y": 0.5074626865671642
+   },
+   "duration": 63
+  },
+  {
+   "filename": "cc-shadow 7.png",
+   "frame": {
+    "x": 210,
+    "y": 67,
+    "w": 70,
+    "h": 67
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 70,
+    "h": 67
+   },
+   "sourceSize": {
+    "w": 70,
+    "h": 67
+   },
+   "pivot": {
+    "x": 0.4857142857142857,
+    "y": 0.5074626865671642
+   },
+   "duration": 63
+  },
+  {
+   "filename": "cc-shadow 8.png",
+   "frame": {
+    "x": 0,
+    "y": 134,
+    "w": 70,
+    "h": 67
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 70,
+    "h": 67
+   },
+   "sourceSize": {
+    "w": 70,
+    "h": 67
+   },
+   "pivot": {
+    "x": 0.4857142857142857,
+    "y": 0.5074626865671642
+   },
+   "duration": 63
+  },
+  {
+   "filename": "cc-shadow 9.png",
+   "frame": {
+    "x": 70,
+    "y": 134,
+    "w": 70,
+    "h": 67
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 70,
+    "h": 67
+   },
+   "sourceSize": {
+    "w": 70,
+    "h": 67
+   },
+   "pivot": {
+    "x": 0.4857142857142857,
+    "y": 0.5074626865671642
+   },
+   "duration": 63
+  }
+ ],
+ "meta": {
+  "app": "PixelLab VFX Creator",
+  "image": "cc-shadow.png",
+  "format": "RGBA8888",
+  "size": {
+   "w": 280,
+   "h": 201
+  },
+  "scale": "1",
+  "anchor": {
+   "kind": "origin",
+   "x": 34,
+   "y": 34
+  },
+  "frameTags": [
+   {
+    "name": "cc-shadow",
+    "from": 0,
+    "to": 9,
+    "direction": "forward"
+   }
+  ]
+ }
+}

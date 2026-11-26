@@ -16,7 +16,7 @@ from PIL import Image
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ASSETS = os.path.join(ROOT, "IdleRPG", "Assets.xcassets")
-VISITORS = ["wounded", "gambler", "pilgrim"]
+VISITORS = ["wounded", "gambler", "pilgrim", "herbalist"]
 FRAMES = 4
 DIRECTION = "south-west"
 
@@ -25,6 +25,7 @@ IDS = {
     "wounded": "9e4555bb-da79-4032-a2f5-7f58aaba378a",
     "gambler": "c354499b-0835-47d4-bac6-6cafec0b8dc1",
     "pilgrim": "7638df08-2a9a-41a1-b7d5-0c479992b72f",
+    "herbalist": "787871f8-9875-430e-809b-c1ca62a74b03",
 }
 
 

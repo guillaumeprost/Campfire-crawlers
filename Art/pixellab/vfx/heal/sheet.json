@@ -1,0 +1,313 @@
+{
+ "frames": [
+  {
+   "filename": "cc-heal 0.png",
+   "frame": {
+    "x": 0,
+    "y": 0,
+    "w": 62,
+    "h": 102
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 62,
+    "h": 102
+   },
+   "sourceSize": {
+    "w": 62,
+    "h": 102
+   },
+   "pivot": {
+    "x": 0.5,
+    "y": 0.696078431372549
+   },
+   "duration": 91
+  },
+  {
+   "filename": "cc-heal 1.png",
+   "frame": {
+    "x": 62,
+    "y": 0,
+    "w": 62,
+    "h": 102
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 62,
+    "h": 102
+   },
+   "sourceSize": {
+    "w": 62,
+    "h": 102
+   },
+   "pivot": {
+    "x": 0.5,
+    "y": 0.696078431372549
+   },
+   "duration": 91
+  },
+  {
+   "filename": "cc-heal 2.png",
+   "frame": {
+    "x": 124,
+    "y": 0,
+    "w": 62,
+    "h": 102
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 62,
+    "h": 102
+   },
+   "sourceSize": {
+    "w": 62,
+    "h": 102
+   },
+   "pivot": {
+    "x": 0.5,
+    "y": 0.696078431372549
+   },
+   "duration": 91
+  },
+  {
+   "filename": "cc-heal 3.png",
+   "frame": {
+    "x": 186,
+    "y": 0,
+    "w": 62,
+    "h": 102
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 62,
+    "h": 102
+   },
+   "sourceSize": {
+    "w": 62,
+    "h": 102
+   },
+   "pivot": {
+    "x": 0.5,
+    "y": 0.696078431372549
+   },
+   "duration": 91
+  },
+  {
+   "filename": "cc-heal 4.png",
+   "frame": {
+    "x": 0,
+    "y": 102,
+    "w": 62,
+    "h": 102
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 62,
+    "h": 102
+   },
+   "sourceSize": {
+    "w": 62,
+    "h": 102
+   },
+   "pivot": {
+    "x": 0.5,
+    "y": 0.696078431372549
+   },
+   "duration": 91
+  },
+  {
+   "filename": "cc-heal 5.png",
+   "frame": {
+    "x": 62,
+    "y": 102,
+    "w": 62,
+    "h": 102
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 62,
+    "h": 102
+   },
+   "sourceSize": {
+    "w": 62,
+    "h": 102
+   },
+   "pivot": {
+    "x": 0.5,
+    "y": 0.696078431372549
+   },
+   "duration": 91
+  },
+  {
+   "filename": "cc-heal 6.png",
+   "frame": {
+    "x": 124,
+    "y": 102,
+    "w": 62,
+    "h": 102
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 62,
+    "h": 102
+   },
+   "sourceSize": {
+    "w": 62,
+    "h": 102
+   },
+   "pivot": {
+    "x": 0.5,
+    "y": 0.696078431372549
+   },
+   "duration": 91
+  },
+  {
+   "filename": "cc-heal 7.png",
+   "frame": {
+    "x": 186,
+    "y": 102,
+    "w": 62,
+    "h": 102
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 62,
+    "h": 102
+   },
+   "sourceSize": {
+    "w": 62,
+    "h": 102
+   },
+   "pivot": {
+    "x": 0.5,
+    "y": 0.696078431372549
+   },
+   "duration": 91
+  },
+  {
+   "filename": "cc-heal 8.png",
+   "frame": {
+    "x": 0,
+    "y": 204,
+    "w": 62,
+    "h": 102
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 62,
+    "h": 102
+   },
+   "sourceSize": {
+    "w": 62,
+    "h": 102
+   },
+   "pivot": {
+    "x": 0.5,
+    "y": 0.696078431372549
+   },
+   "duration": 91
+  },
+  {
+   "filename": "cc-heal 9.png",
+   "frame": {
+    "x": 62,
+    "y": 204,
+    "w": 62,
+    "h": 102
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 62,
+    "h": 102
+   },
+   "sourceSize": {
+    "w": 62,
+    "h": 102
+   },
+   "pivot": {
+    "x": 0.5,
+    "y": 0.696078431372549
+   },
+   "duration": 91
+  },
+  {
+   "filename": "cc-heal 10.png",
+   "frame": {
+    "x": 124,
+    "y": 204,
+    "w": 62,
+    "h": 102
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 62,
+    "h": 102
+   },
+   "sourceSize": {
+    "w": 62,
+    "h": 102
+   },
+   "pivot": {
+    "x": 0.5,
+    "y": 0.696078431372549
+   },
+   "duration": 91
+  }
+ ],
+ "meta": {
+  "app": "PixelLab VFX Creator",
+  "image": "cc-heal.png",
+  "format": "RGBA8888",
+  "size": {
+   "w": 248,
+   "h": 306
+  },
+  "scale": "1",
+  "anchor": {
+   "kind": "origin",
+   "x": 31,
+   "y": 71
+  },
+  "frameTags": [
+   {
+    "name": "cc-heal",
+    "from": 0,
+    "to": 10,
+    "direction": "forward"
+   }
+  ]
+ }
+}

@@ -167,7 +167,7 @@ enum HeroClass: String, Codable, CaseIterable, Identifiable {
         }
     }
 
-    /// Noms des images d'une animation : idle, walk, attack, special, hurt, flee, rest, sleep ou tavern.
+    /// Noms des images d'une animation : idle, walk, attack, special, victory, hurt, flee, rest, sleep ou tavern.
     /// Sprites pixel art animés avec PixelLab, installés par `Art/import_pixellab.py`.
     /// `rest` : 4 images calmes puis 4 où il s'occupe (aiguise sa lame, taille des flèches, lit).
     func frames(_ animation: String) -> [String] {
@@ -176,7 +176,7 @@ enum HeroClass: String, Codable, CaseIterable, Identifiable {
         case "hurt": count = 1
         case "attack": count = 6
         case "special": count = 10
-        case "walk", "flee", "rest", "tavern": count = 8
+        case "walk", "flee", "rest", "tavern", "victory": count = 8
         default: count = 4
         }
         return (1...count).map { "hero_\(rawValue)_\(animation)_\($0)" }
@@ -201,7 +201,7 @@ enum HeroClass: String, Codable, CaseIterable, Identifiable {
 /// le héros à sa façon ; un seul peut être actif, et on en change au feu de camp.
 /// Sprites pixel art animés avec PixelLab, installés par `Art/import_companions.py`.
 enum CompanionKind: String, Codable, CaseIterable, Identifiable {
-    case wolf, panther, bear
+    case wolf, panther, bear, fox, stag
 
     var id: String { rawValue }
 
@@ -210,6 +210,8 @@ enum CompanionKind: String, Codable, CaseIterable, Identifiable {
         case .wolf: "Loup blanc"
         case .panther: "Panthère"
         case .bear: "Ours"
+        case .fox: "Renard"
+        case .stag: "Cerf"
         }
     }
 
@@ -219,6 +221,8 @@ enum CompanionKind: String, Codable, CaseIterable, Identifiable {
         case .wolf: "le Loup blanc"
         case .panther: "la Panthère"
         case .bear: "l'Ours"
+        case .fox: "le Renard"
+        case .stag: "le Cerf"
         }
     }
 
@@ -227,6 +231,8 @@ enum CompanionKind: String, Codable, CaseIterable, Identifiable {
         case .wolf: "Féroce à tes côtés"
         case .panther: "Vive et discrète"
         case .bear: "Robuste et rassurant"
+        case .fox: "Rusé, il flaire le danger"
+        case .stag: "Il connaît tous les sentiers"
         }
     }
 
@@ -236,6 +242,8 @@ enum CompanionKind: String, Codable, CaseIterable, Identifiable {
         case .wolf: ["+15\u{00A0}% d'attaque", "+10\u{00A0}% d'attaque en donjon"]
         case .panther: ["+12\u{00A0}% de vitesse", "+10\u{00A0}% de chance"]
         case .bear: ["+20\u{00A0}% de PV max", "repos au feu plus rapide"]
+        case .fox: ["+10\u{00A0}% de chance de fuite", "pièges 30\u{00A0}% moins douloureux"]
+        case .stag: ["trajets 20\u{00A0}% plus courts", "repos au feu un peu plus rapide"]
         }
     }
 
@@ -249,11 +257,17 @@ enum CompanionKind: String, Codable, CaseIterable, Identifiable {
     var speedBonus: Double { self == .panther ? 0.12 : 0 }
     var luckBonus: Double { self == .panther ? 0.10 : 0 }
     /// Facteur multiplicatif sur la vitesse de repos au camp.
-    var restFactor: Double { self == .bear ? 1.5 : 1 }
+    var restFactor: Double { self == .bear ? 1.5 : self == .stag ? 1.15 : 1 }
+    /// Points ajoutés à la chance de fuite : le renard sent venir les ennuis.
+    var escapeBonus: Double { self == .fox ? 0.10 : 0 }
+    /// Part des dégâts de piège réellement subie.
+    var trapFactor: Double { self == .fox ? 0.7 : 1 }
+    /// Facteur sur la durée des trajets : le cerf mène par les raccourcis.
+    var travelFactor: Double { self == .stag ? 0.8 : 1 }
 
-    /// Noms des images d'une animation : walk (8 images), idle / sit / sleep (4 images).
+    /// Noms des images d'une animation : walk (8 images), attack (6), idle / sit / sleep (4).
     func frames(_ animation: String) -> [String] {
-        let count = animation == "walk" ? 8 : 4
+        let count = animation == "walk" ? 8 : animation == "attack" ? 6 : 4
         return (1...count).map { "companion_\(rawValue)_\(animation)_\($0)" }
     }
 
@@ -262,7 +276,7 @@ enum CompanionKind: String, Codable, CaseIterable, Identifiable {
     /// Symbole SF de repli (icône de notification, accessibilité).
     var symbol: String {
         switch self {
-        case .wolf, .bear: "pawprint.fill"
+        case .wolf, .bear, .fox, .stag: "pawprint.fill"
         case .panther: "pawprint.fill"
         }
     }
@@ -309,6 +323,17 @@ struct Room: Codable {
     var trapDisarmed: Bool?
     /// Relique gardée par un boss, gagnée en le battant.
     var relic: Relic?
+    /// Monstre d'élite : plus coriace, plus généreux. Absent des anciennes sauvegardes.
+    var elite: Bool?
+
+    /// Un monstre ordinaire sur douze est un élite, jamais dans la première salle.
+    static let eliteChance = 0.08
+    static let eliteHP = 1.6
+    static let eliteDamage = 1.25
+    static let eliteGold = 2.0
+    static let eliteXP = 2.0
+    /// Sa chance de laisser un objet est multipliée d'autant.
+    static let eliteItem = 3.0
 }
 
 struct Run: Codable {

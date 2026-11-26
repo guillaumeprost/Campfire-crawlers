@@ -1,0 +1,235 @@
+{
+ "frames": [
+  {
+   "filename": "cc-aura-ice 0.png",
+   "frame": {
+    "x": 0,
+    "y": 0,
+    "w": 89,
+    "h": 84
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 89,
+    "h": 84
+   },
+   "sourceSize": {
+    "w": 89,
+    "h": 84
+   },
+   "pivot": {
+    "x": 0.5280898876404494,
+    "y": 0.8333333333333334
+   },
+   "duration": 125
+  },
+  {
+   "filename": "cc-aura-ice 1.png",
+   "frame": {
+    "x": 89,
+    "y": 0,
+    "w": 89,
+    "h": 84
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 89,
+    "h": 84
+   },
+   "sourceSize": {
+    "w": 89,
+    "h": 84
+   },
+   "pivot": {
+    "x": 0.5280898876404494,
+    "y": 0.8333333333333334
+   },
+   "duration": 125
+  },
+  {
+   "filename": "cc-aura-ice 2.png",
+   "frame": {
+    "x": 178,
+    "y": 0,
+    "w": 89,
+    "h": 84
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 89,
+    "h": 84
+   },
+   "sourceSize": {
+    "w": 89,
+    "h": 84
+   },
+   "pivot": {
+    "x": 0.5280898876404494,
+    "y": 0.8333333333333334
+   },
+   "duration": 125
+  },
+  {
+   "filename": "cc-aura-ice 3.png",
+   "frame": {
+    "x": 0,
+    "y": 84,
+    "w": 89,
+    "h": 84
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 89,
+    "h": 84
+   },
+   "sourceSize": {
+    "w": 89,
+    "h": 84
+   },
+   "pivot": {
+    "x": 0.5280898876404494,
+    "y": 0.8333333333333334
+   },
+   "duration": 125
+  },
+  {
+   "filename": "cc-aura-ice 4.png",
+   "frame": {
+    "x": 89,
+    "y": 84,
+    "w": 89,
+    "h": 84
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 89,
+    "h": 84
+   },
+   "sourceSize": {
+    "w": 89,
+    "h": 84
+   },
+   "pivot": {
+    "x": 0.5280898876404494,
+    "y": 0.8333333333333334
+   },
+   "duration": 125
+  },
+  {
+   "filename": "cc-aura-ice 5.png",
+   "frame": {
+    "x": 178,
+    "y": 84,
+    "w": 89,
+    "h": 84
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 89,
+    "h": 84
+   },
+   "sourceSize": {
+    "w": 89,
+    "h": 84
+   },
+   "pivot": {
+    "x": 0.5280898876404494,
+    "y": 0.8333333333333334
+   },
+   "duration": 125
+  },
+  {
+   "filename": "cc-aura-ice 6.png",
+   "frame": {
+    "x": 0,
+    "y": 168,
+    "w": 89,
+    "h": 84
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 89,
+    "h": 84
+   },
+   "sourceSize": {
+    "w": 89,
+    "h": 84
+   },
+   "pivot": {
+    "x": 0.5280898876404494,
+    "y": 0.8333333333333334
+   },
+   "duration": 125
+  },
+  {
+   "filename": "cc-aura-ice 7.png",
+   "frame": {
+    "x": 89,
+    "y": 168,
+    "w": 89,
+    "h": 84
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 89,
+    "h": 84
+   },
+   "sourceSize": {
+    "w": 89,
+    "h": 84
+   },
+   "pivot": {
+    "x": 0.5280898876404494,
+    "y": 0.8333333333333334
+   },
+   "duration": 125
+  }
+ ],
+ "meta": {
+  "app": "PixelLab VFX Creator",
+  "image": "cc-aura-ice.png",
+  "format": "RGBA8888",
+  "size": {
+   "w": 267,
+   "h": 252
+  },
+  "scale": "1",
+  "anchor": {
+   "kind": "origin",
+   "x": 47,
+   "y": 70
+  },
+  "frameTags": [
+   {
+    "name": "cc-aura-ice",
+    "from": 0,
+    "to": 7,
+    "direction": "forward"
+   }
+  ]
+ }
+}

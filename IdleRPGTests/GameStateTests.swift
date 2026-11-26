@@ -13,7 +13,7 @@ final class GameStateTests: XCTestCase {
     private let debugKeys = ["save.v2", "debugReset", "debugGold", "debugTimeScale",
                              "debugHero", "debugGo", "debugHeal", "debugSkill",
                              "debugWeather", "debugNight", "debugVisitor", "debugRelic",
-                             "debugLevel", "debugUnlock", "debugFeats", "debugSky"]
+                             "debugLevel", "debugUnlock", "debugFeats", "debugSky", "debugSeed"]
 
     override func setUp() {
         super.setUp()
@@ -34,7 +34,7 @@ final class GameStateTests: XCTestCase {
     /// Le temps est figé (jour, ciel dégagé) pour que les chiffres ne dépendent pas de l'heure du test.
     private func makeGame(gold: Double = 0, timeScale: Double = 1, weather: String? = "clear", night: Bool? = false,
                           visitor: String? = nil, relic: String? = nil,
-                          level: Int = 1, unlock: Bool = false, feats: Bool = false) -> GameState {
+                          level: Int = 1, unlock: Bool = false, feats: Bool = false, seed: Int? = nil) -> GameState {
         let d = UserDefaults.standard
         for key in debugKeys { d.removeObject(forKey: key) }
         d.set(true, forKey: "debugReset")
@@ -48,6 +48,8 @@ final class GameStateTests: XCTestCase {
         if level > 1 { d.set(level, forKey: "debugLevel") }
         if unlock { d.set(true, forKey: "debugUnlock") }
         if feats { d.set(true, forKey: "debugFeats") }
+        // Même graine : deux parties tirent les mêmes salles, les mêmes dégâts, le même butin.
+        if let seed { d.set(seed, forKey: "debugSeed") }
         return GameState()
     }
 
@@ -392,8 +394,10 @@ final class GameStateTests: XCTestCase {
                 guard case .traveling = game.activity else { XCTFail("\(dungeon.name) : départ refusé."); continue }
                 let ahead = game.forecast()
                 let label = "\(dungeon.name), \(hero) niveau \(level)"
-                // Une mort prévue qui n'est ni de faim ni de soif arrive pendant la sortie.
-                if let death = ahead.diesAt, !ahead.starved {
+                // Une mort prévue pendant la sortie : au combat, ou de soif sur le chemin du retour
+                // (sorti du donjon à bout de forces, il ne rentre jamais). Morte de faim au camp
+                // des jours plus tard, elle n'empêche pas de vérifier le retour.
+                if let death = ahead.diesAt, !ahead.starved || ahead.diesOnTheWay {
                     game.tick(now: start.addingTimeInterval(death - game.clock + 1))
                     XCTAssertEqual(game.generation, lineage + 1, "\(label) : la mort prévue doit arriver.")
                     XCTAssertEqual(game.graves.count, 1, "\(label) : sa tombe rejoint le cimetière.")
@@ -456,24 +460,31 @@ final class GameStateTests: XCTestCase {
     }
 
     func testNightSpeedsUpRestAndRainSlowsIt() {
-        func restTime(weather: String, night: Bool, relic: String? = nil) -> TimeInterval? {
-            let game = makeGame(weather: weather, night: night, relic: relic); game.chooseHero(.warrior)
+        func restTime(weather: String, seed: Int, relic: String? = nil) -> TimeInterval? {
+            let game = makeGame(weather: weather, night: false, relic: relic, seed: seed); game.chooseHero(.warrior)
             let start = Date()
             game.tick(now: start)
             game.travel(to: .dungeon(0))
             guard let lands = game.forecast().landsAt else { return nil }
             game.tick(now: start.addingTimeInterval(lands - game.clock + 1))
+            // Le boss de la Cave laisse une relique au hasard : si c'est la braise éternelle, la pluie
+            // ne compte plus et la comparaison n'a pas de sens. On passe à une autre sortie.
+            if relic == nil, game.relics.contains(.ember) { return nil }
             guard game.heroClass != nil, let rested = game.forecast().restedAt else { return nil }
             return (rested - game.clock) / max(game.maxHP - game.hp, GameState.maxEnergy - game.energy, 1)
         }
-        // Même sortie, même fatigue au retour (les tirages partent de la même sauvegarde vide) :
-        // seule la vitesse du repos change.
-        guard let day = restTime(weather: "clear", night: false),
-              let rain = restTime(weather: "rain", night: false) else { return }
-        XCTAssertGreaterThan(rain, day, "Sous la pluie, le feu faiblit.")
-        if let ember = restTime(weather: "rain", night: false, relic: "ember") {
-            XCTAssertLessThan(ember, rain, "La braise éternelle protège le feu de la pluie.")
+        // Même graine, donc même sortie et même fatigue au retour : seule la vitesse du repos change.
+        // On prend la première sortie d'où le héros rentre fatigué, sans la braise.
+        for seed in 1...40 {
+            guard let day = restTime(weather: "clear", seed: seed),
+                  let rain = restTime(weather: "rain", seed: seed) else { continue }
+            XCTAssertGreaterThan(rain, day, "Sous la pluie, le feu faiblit.")
+            if let ember = restTime(weather: "rain", seed: seed, relic: "ember") {
+                XCTAssertLessThan(ember, rain, "La braise éternelle protège le feu de la pluie.")
+            }
+            return
         }
+        XCTFail("Aucune sortie comparable sur 40 graines.")
     }
 
     func testSaveRoundTripKeepsRelicsAndAnsweredVisits() {

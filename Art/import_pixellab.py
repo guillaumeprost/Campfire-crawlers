@@ -6,7 +6,7 @@ envoyée à PixelLab, ignorée ; f1.. = frames générées). Toutes les frames d
 posées sur un même canevas, centré sur son corps pour que le miroir (héros face à gauche)
 tourne autour de lui, et assez large pour l'épée, l'arc ou le bâton de l'attaque.
 
-Usage : <python avec Pillow> Art/import_pixellab.py [warrior archer mage extras]
+Usage : <python avec Pillow> Art/import_pixellab.py [warrior archer mage extras victory]
 Le nombre de frames par animation doit correspondre à HeroClass.frames() (World.swift).
 """
 import json, os, sys
@@ -17,6 +17,7 @@ ASSETS = os.path.join(ROOT, "IdleRPG", "Assets.xcassets")
 EIGHT = [1, 2, 3, 4, 5, 6, 7, 8]
 FOUR = [1, 2, 3, 4]
 SPECIAL_SHIFT = 12  # décalage du héros dans les frames 128x128 du coup spécial
+VICTORY_SHIFT = 16  # décalage du héros dans les frames 112x112 de la victoire
 
 # animation du jeu -> frames retenues : liste de numéros pris dans le dossier du même nom,
 # ou de couples (dossier, numéro). Le repos enchaîne 4 images calmes puis 4 où le héros
@@ -108,14 +109,45 @@ def remove_imageset(name):
         os.rmdir(folder)
 
 
+def victory(hero):
+    """Pose de victoire seule : `Art/import_pixellab.py victory` la (ré)installe sans toucher au reste."""
+    spec = HEROES[hero]
+    src = os.path.join(ROOT, "Art", "pixellab", hero)
+    center = spec["_center"]
+    # Victoire : frames 112x112 (le héros posé à x+16, pieds en bas, de la place au-dessus pour
+    # l'arme levée), animées depuis idle/f0. Canevas à part, centré sur le corps, joué comme le
+    # coup spécial sur un sprite dédié. HeroClass.frames("victory") en attend 8.
+    vdir = os.path.join(src, "victory")
+    if os.path.isdir(vdir):
+        vc = center + VICTORY_SHIFT
+        vfs = [Image.open(os.path.join(vdir, f"f{i}.png")).convert("RGBA") for i in EIGHT]
+        vreach = max(max(vc - f.getbbox()[0], f.getbbox()[2] - vc) for f in vfs)
+        top = min(f.getbbox()[1] for f in vfs)
+        gap = min(f.height - f.getbbox()[3] for f in vfs)   # vide sous les pieds, retiré
+        vw, vh = 2 * vreach + 2, 112 - top - gap
+        for n, f in enumerate(vfs, 1):
+            canvas = Image.new("RGBA", (vw, vh), (0, 0, 0, 0))
+            canvas.alpha_composite(f.crop((0, top, f.width, top + vh)), (vw // 2 - vc, 0))
+            write_imageset(f"hero_{hero}_victory_{n}", canvas)
+        print(hero, f"victoire {vw}x{vh}", len(vfs))
+
+
 def main(hero):
     spec = HEROES[hero]
     src = os.path.join(ROOT, "Art", "pixellab", hero)
     center = spec["_center"]
     def load(anim, pick):
         folder, i = pick if isinstance(pick, tuple) else (anim, pick)
-        return Image.open(os.path.join(src, folder, f"f{i}.png")).convert("RGBA")
-    frames = {anim: [load(anim, p) for p in picks] for anim, picks in spec.items() if not anim.startswith("_")}
+        return folder, Image.open(os.path.join(src, folder, f"f{i}.png")).convert("RGBA")
+    loaded = {anim: [load(anim, p) for p in picks] for anim, picks in spec.items() if not anim.startswith("_")}
+    frames = {anim: [f for _, f in fs] for anim, fs in loaded.items()}
+    # Pieds au sol : PixelLab laisse deux à huit pixels vides sous le héros, selon le dossier
+    # d'origine (le mage assis sur son rondin flottait). On retire, dossier par dossier, le vide
+    # commun à toutes ses images ; un saut à l'intérieur d'une animation est conservé.
+    gaps = {}
+    for fs in loaded.values():
+        for folder, f in fs:
+            gaps[folder] = min(gaps.get(folder, 999), f.height - f.getbbox()[3])
 
     # Canevas commun : symétrique autour du corps, assez large pour tout ce qui dépasse.
     reach = max(max(center - f.getbbox()[0], f.getbbox()[2] - center)
@@ -129,10 +161,13 @@ def main(hero):
         if d.startswith(f"hero_{hero}_") and d.endswith(".imageset") and not d.startswith(f"hero_{hero}_portrait"):
             remove_imageset(d[: -len(".imageset")])
 
-    for anim, fs in frames.items():
-        for n, frame in enumerate(fs, 1):
+    for anim, fs in loaded.items():
+        for n, (folder, frame) in enumerate(fs, 1):
             canvas = Image.new("RGBA", (cw, ch), (0, 0, 0, 0))
-            canvas.alpha_composite(frame, (dx, ch - frame.height))
+            # alpha_composite refuse de déborder : on colle sur un cadre plus haut, puis on rogne.
+            tall = Image.new("RGBA", (cw, ch + gaps[folder]), (0, 0, 0, 0))
+            tall.alpha_composite(frame, (dx, ch - frame.height + gaps[folder]))
+            canvas.alpha_composite(tall.crop((0, 0, cw, ch)))
             write_imageset(f"hero_{hero}_{anim}_{n}", canvas)
     print(hero, f"canevas {cw}x{ch}", {a: len(f) for a, f in frames.items()})
 
@@ -144,12 +179,15 @@ def main(hero):
         sfs = [Image.open(os.path.join(src, "special", f"f{i}.png")).convert("RGBA") for i in spec["_special"]]
         sreach = max(max(sc - f.getbbox()[0], f.getbbox()[2] - sc) for f in sfs)
         top = min(f.getbbox()[1] for f in sfs)
-        sw, sh = 2 * sreach + 2, 128 - top
+        gap = min(f.height - f.getbbox()[3] for f in sfs)   # vide sous les pieds, retiré
+        sw, sh = 2 * sreach + 2, 128 - top - gap
         for n, f in enumerate(sfs, 1):
             canvas = Image.new("RGBA", (sw, sh), (0, 0, 0, 0))
-            canvas.alpha_composite(f, (sw // 2 - sc, -top))
+            canvas.alpha_composite(f.crop((0, top, f.width, top + sh)), (sw // 2 - sc, 0))
             write_imageset(f"hero_{hero}_special_{n}", canvas)
         print(hero, f"special {sw}x{sh}", len(sfs))
+
+    victory(hero)
 
     # Portrait : la tête de la pose d'attente, agrandie sans lissage.
     idle = Image.open(os.path.join(src, "idle", "f1.png")).convert("RGBA")
@@ -161,4 +199,8 @@ def main(hero):
 
 if __name__ == "__main__":
     for h in sys.argv[1:] or [*HEROES, "extras"]:
-        extras() if h == "extras" else main(h)
+        if h == "victory":
+            for hero in HEROES:
+                victory(hero)
+        else:
+            extras() if h == "extras" else main(h)

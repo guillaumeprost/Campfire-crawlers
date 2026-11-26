@@ -1,0 +1,235 @@
+{
+ "frames": [
+  {
+   "filename": "cc-aura-fire 0.png",
+   "frame": {
+    "x": 0,
+    "y": 0,
+    "w": 78,
+    "h": 105
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 78,
+    "h": 105
+   },
+   "sourceSize": {
+    "w": 78,
+    "h": 105
+   },
+   "pivot": {
+    "x": 0.5,
+    "y": 0.8380952380952381
+   },
+   "duration": 83
+  },
+  {
+   "filename": "cc-aura-fire 1.png",
+   "frame": {
+    "x": 78,
+    "y": 0,
+    "w": 78,
+    "h": 105
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 78,
+    "h": 105
+   },
+   "sourceSize": {
+    "w": 78,
+    "h": 105
+   },
+   "pivot": {
+    "x": 0.5,
+    "y": 0.8380952380952381
+   },
+   "duration": 83
+  },
+  {
+   "filename": "cc-aura-fire 2.png",
+   "frame": {
+    "x": 156,
+    "y": 0,
+    "w": 78,
+    "h": 105
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 78,
+    "h": 105
+   },
+   "sourceSize": {
+    "w": 78,
+    "h": 105
+   },
+   "pivot": {
+    "x": 0.5,
+    "y": 0.8380952380952381
+   },
+   "duration": 83
+  },
+  {
+   "filename": "cc-aura-fire 3.png",
+   "frame": {
+    "x": 0,
+    "y": 105,
+    "w": 78,
+    "h": 105
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 78,
+    "h": 105
+   },
+   "sourceSize": {
+    "w": 78,
+    "h": 105
+   },
+   "pivot": {
+    "x": 0.5,
+    "y": 0.8380952380952381
+   },
+   "duration": 83
+  },
+  {
+   "filename": "cc-aura-fire 4.png",
+   "frame": {
+    "x": 78,
+    "y": 105,
+    "w": 78,
+    "h": 105
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 78,
+    "h": 105
+   },
+   "sourceSize": {
+    "w": 78,
+    "h": 105
+   },
+   "pivot": {
+    "x": 0.5,
+    "y": 0.8380952380952381
+   },
+   "duration": 83
+  },
+  {
+   "filename": "cc-aura-fire 5.png",
+   "frame": {
+    "x": 156,
+    "y": 105,
+    "w": 78,
+    "h": 105
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 78,
+    "h": 105
+   },
+   "sourceSize": {
+    "w": 78,
+    "h": 105
+   },
+   "pivot": {
+    "x": 0.5,
+    "y": 0.8380952380952381
+   },
+   "duration": 83
+  },
+  {
+   "filename": "cc-aura-fire 6.png",
+   "frame": {
+    "x": 0,
+    "y": 210,
+    "w": 78,
+    "h": 105
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 78,
+    "h": 105
+   },
+   "sourceSize": {
+    "w": 78,
+    "h": 105
+   },
+   "pivot": {
+    "x": 0.5,
+    "y": 0.8380952380952381
+   },
+   "duration": 83
+  },
+  {
+   "filename": "cc-aura-fire 7.png",
+   "frame": {
+    "x": 78,
+    "y": 210,
+    "w": 78,
+    "h": 105
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 78,
+    "h": 105
+   },
+   "sourceSize": {
+    "w": 78,
+    "h": 105
+   },
+   "pivot": {
+    "x": 0.5,
+    "y": 0.8380952380952381
+   },
+   "duration": 83
+  }
+ ],
+ "meta": {
+  "app": "PixelLab VFX Creator",
+  "image": "cc-aura-fire.png",
+  "format": "RGBA8888",
+  "size": {
+   "w": 234,
+   "h": 315
+  },
+  "scale": "1",
+  "anchor": {
+   "kind": "origin",
+   "x": 39,
+   "y": 88
+  },
+  "frameTags": [
+   {
+    "name": "cc-aura-fire",
+    "from": 0,
+    "to": 7,
+    "direction": "forward"
+   }
+  ]
+ }
+}

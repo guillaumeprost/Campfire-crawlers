@@ -9,6 +9,7 @@ import math, random, statistics, sys
 
 P = dict(  # paramètres réglables
     rank_factor=1.35, item_factor=1.15, chest_item=0.5, chest_time=0.4, monster_item=0.11, max_rank=5,
+    elite=0.08, elite_hp=1.6, elite_dmg=1.25, elite_gold=2.0, elite_xp=2.0, elite_item=3.0,  # monstres d'élite
     coin_mult=0.65,                                    # pièces ramassées (monstres, boss, coffres) réduites
     energy=[6, 15, 30, 55, 90], energy_regen=1.8,     # énergie par minute
     hp_regen=0.022,                                    # part des PV max par minute
@@ -200,7 +201,9 @@ class Game:
             wounded = min(hp, max(round(maxhp * 0.05), 1)); ko = False; ko_boss = kind == 'boss'
             if kind in ('monster', 'boss'):
                 boss = kind == 'boss'
+                elite = (not boss) and room > 0 and r.random() < P['elite']
                 fhp = d['hp'] * k * (3 if boss else 1); fdm = d['dmg'] * k * (1.5 if boss else 1) * (P['night_dmg'] if night else 1)
+                if elite: fhp *= P['elite_hp']; fdm *= P['elite_dmg']
                 dmg = round(fdm * max(math.ceil(fhp / atk_now) - 1, 0.25) * spread * taken)
                 # Joueur attentif : coup spécial sur le boss, ou pour éviter une défaite.
                 if new and real and P['mode'] == 'active' and charge >= 1 and (boss or dmg >= hp):
@@ -209,15 +212,15 @@ class Game:
                 else:
                     if dmg >= hp: potions -= 1; hp += heal()
                     hp = min(max(hp - dmg, 1), maxhp)
-                    gold += round(d['gold'] * kg * (10 if boss else 1) * spread * gmul * P['coin_mult'])
+                    gold += round(d['gold'] * kg * (10 if boss else 1) * (P['elite_gold'] if elite else 1) * spread * gmul * P['coin_mult'])
                     charge = min(charge + 1 / P['skill_victories'], 1)
                     if real and new:
                         s.cheer(10 if boss else 1)
                         if boss: s.boss_kills += 1
                     if real:
                         if boss: loot.append(s.item(i + 1, rank, 1, s.luck(), r))
-                        elif r.random() < P['monster_item'] * (1 + s.luck()): loot.append(s.item(i + 1, rank, 0, s.luck(), r))
-                    xp += d['xp'] * k * (5 if boss else 1)
+                        elif r.random() < P['monster_item'] * (1 + s.luck()) * (P['elite_item'] if elite else 1): loot.append(s.item(i + 1, rank, 0, s.luck(), r))
+                    xp += d['xp'] * k * (5 if boss else 1) * (P['elite_xp'] if elite else 1)
                     while xp >= round(30 * P['xp_growth'] ** (level - 1)):
                         xp -= round(30 * P['xp_growth'] ** (level - 1)); level += 1; hp += round(20 * s.hpf)
                         maxhp = round((100 + 20 * (level - 1) + s.g('amulet')) * s.hpf); atk = round((10 + 3 * (level - 1) + s.g('weapon')) * s.atkf)

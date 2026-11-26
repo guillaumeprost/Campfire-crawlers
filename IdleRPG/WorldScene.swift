@@ -97,6 +97,13 @@ final class WorldScene: SKScene {
     private let hero = SKSpriteNode()
     /// Sprite du coup spécial, plus grand que le héros, qui le remplace le temps de l'animation.
     private var specialSprite: SKSpriteNode?
+    /// Pose de victoire : la scène du donjon reste en place jusqu'à cette heure-là.
+    private var victoryUntil: TimeInterval = 0
+    /// Compagnon affiché et son animation : un changement au camp se voit tout de suite.
+    private var shownCompanion: CompanionKind?
+    private var companionPose = "idle"
+    /// Coups portés par le héros dans le combat en cours : le compagnon s'en mêle un coup sur deux.
+    private var heroBlows = 0
     private let heroShadow = SKShapeNode()
     /// Compagnon animal qui suit le héros, quand un compagnon est actif.
     private let companion = SKSpriteNode()
@@ -115,6 +122,12 @@ final class WorldScene: SKScene {
     private weak var barmaid: SKSpriteNode?
     private var encounter: SKSpriteNode?
     private var encounterLift: CGFloat = 0
+    /// Taille de la créature elle-même : le sprite animé est plus large qu'elle.
+    private var encounterBody: CGSize = .zero
+    private var encounterSprite = ""
+    /// Aura de l'arme, posée derrière le héros (elle le suit et se retourne avec lui).
+    private let aura = SKSpriteNode()
+    private var auraName: String?
     private let encounterShadow = SKShapeNode()
 
     /// Décor qui défile avec le sol et revient en boucle.
@@ -170,6 +183,34 @@ final class WorldScene: SKScene {
         let size = texture.size()
         let node = SKSpriteNode(texture: texture)
         node.size = CGSize(width: size.width / max(size.height, 1) * height, height: height)
+        node.anchorPoint = CGPoint(x: 0.5, y: 0)
+        return node
+    }
+
+    /// Images d'une animation de créature (`idle`, `attack`, `death`), vides s'il n'y en a pas.
+    private static func creatureFrames(_ name: String, _ anim: String) -> [SKTexture] {
+        guard let entry = MonsterAnims.table[name] else { return [] }
+        let count: Int
+        switch anim {
+        case "idle": count = entry.idle
+        case "attack": count = entry.attack
+        default: count = entry.death
+        }
+        return count > 0 ? (1...count).map { texture("\(name)_\(anim)_\($0)") } : []
+    }
+
+    /// Créature animée : ses images partagent un cadre plus large que le sprite fixe (pour
+    /// laisser la place aux gestes), centré sur elle, pieds en bas. `height` reste la hauteur
+    /// de la créature elle-même, pas celle du cadre.
+    private static func creature(_ name: String, height: CGFloat) -> SKSpriteNode {
+        let idle = creatureFrames(name, "idle")
+        guard let first = idle.first, let base = MonsterAnims.table[name]?.base, base > 0 else {
+            return sprite(name, height: height)
+        }
+        let scale = height / base
+        let size = first.size()
+        let node = SKSpriteNode(texture: first)
+        node.size = CGSize(width: size.width * scale, height: size.height * scale)
         node.anchorPoint = CGPoint(x: 0.5, y: 0)
         return node
     }
@@ -282,9 +323,12 @@ final class WorldScene: SKScene {
         hero.anchorPoint = CGPoint(x: 0.5, y: 0)
         hero.zPosition = 4
         addChild(hero)
+        aura.zPosition = -0.5
+        aura.isHidden = true
+        hero.addChild(aura)
 
         companion.anchorPoint = CGPoint(x: 0.5, y: 0)
-        companion.zPosition = 3   // juste derrière le héros
+        companion.zPosition = 4.5   // au premier plan : dans le dos du héros, mais devant lui
         companion.isHidden = true
         addChild(companion)
 
@@ -502,10 +546,17 @@ final class WorldScene: SKScene {
         let key = Self.key(for: game.activity) + "|" + game.heroLook.rawValue + (game.injured ? "|blessé" : "")
             + (Self.isDaytime ? "|jour" : "|nuit") + (sleepsAtCamp ? "|dort" : "")
             + "|" + (game.visitor?.id ?? "")
+        if key != modeKey, currentTime < victoryUntil {
+            // Donjon terminé : le héros savoure sa victoire avant de reprendre la route.
+            return
+        }
         if key != modeKey {
             modeKey = key
             weatherKey = ambient.weather
             rebuild()
+        } else if game.activeCompanion != shownCompanion {
+            // Compagnon changé au camp : il prend sa place sans attendre.
+            layoutCompanion(animation: companionPose)
         } else if ambient.weather != weatherKey {
             // Le temps tourne : seule la météo se redessine, sans interrompre ce qui se joue.
             weatherKey = ambient.weather
@@ -678,7 +729,9 @@ final class WorldScene: SKScene {
     private func buildVisitor() {
         guard case .resting = game.activity, let visit = game.visitor else { return }
         // Juste derrière le feu, un peu à droite : il s'y réchauffe sans cacher les flammes.
-        let spot = CGPoint(x: min(campFire.x + 32 * zoom, playWidth - 50), y: feetY + 6)
+        // Quand la marmite est installée, il se décale pour ne pas disparaître derrière le trépied.
+        let aside: CGFloat = game.campLevel >= 3 ? 58 : 32
+        let spot = CGPoint(x: min(campFire.x + aside * zoom, playWidth - 50), y: feetY + 6)
         var top = spot.y + 70 * zoom
         var figure: SKSpriteNode?
         switch visit.kind {
@@ -690,7 +743,14 @@ final class WorldScene: SKScene {
                 .animate(with: (1...4).map { Self.texture("merchant_wave_\($0)") }, timePerFrame: 0.22),
             ])))
             figure = merchant
-        case .wounded, .gambler, .pilgrim:
+        case .minstrel:
+            // Le barde de la taverne, luth en main (dessiné tourné vers la droite).
+            guard UIImage(named: "npc_bard_play_1") != nil else { break }
+            let bard = npc("npc_bard_play_1")
+            bard.xScale = -1
+            bard.run(.repeatForever(.animate(with: Self.npcFrames("npc_bard_play", 8), timePerFrame: 0.18)))
+            figure = bard
+        case .wounded, .gambler, .pilgrim, .herbalist:
             // Sprites PixelLab installés par `Art/import_visitors.py`, dessinés tournés vers le héros.
             let name = "npc_\(visit.kind.rawValue)_idle"
             guard UIImage(named: "\(name)_1") != nil else { break }
@@ -711,6 +771,9 @@ final class WorldScene: SKScene {
         }
         if let figure {
             figure.position = spot
+            // Aucun visiteur ne doit être coupé par le bord : les plus larges (marchand, joueur de dés,
+            // ménestrel) reculent d'autant.
+            figure.position.x = min(spot.x, playWidth - figure.size.width * 0.5 - 6)
             figure.zPosition = 1.5
             props.addChild(figure)
             // Le canevas des animaux garde du vide au-dessus d'eux : la bulle descend d'autant.
@@ -721,7 +784,7 @@ final class WorldScene: SKScene {
         bubble.fillColor = UIColor(white: 0.08, alpha: 0.85)
         bubble.strokeColor = UIColor(red: 1, green: 0.82, blue: 0.3, alpha: 1)
         bubble.lineWidth = 2
-        bubble.position = CGPoint(x: spot.x, y: top)
+        bubble.position = CGPoint(x: figure?.position.x ?? spot.x, y: top)
         bubble.zPosition = 5
         let configuration = UIImage.SymbolConfiguration(pointSize: 18, weight: .bold)
         if let symbol = UIImage(systemName: visit.kind.symbol, withConfiguration: configuration)?
@@ -737,6 +800,14 @@ final class WorldScene: SKScene {
     }
 
     private func rebuild() {
+        victoryUntil = 0
+        endSpecial()
+        refreshAura()
+        // Au camp, à la boutique ou à la taverne, l'aura se fait oublier : elle ne brûle qu'en route et au combat.
+        switch game.activity {
+        case .resting, .shopping, .tavern: aura.isHidden = true
+        default: aura.isHidden = auraName == nil
+        }
         props.removeAllChildren()
         props.removeAllActions()   // les braises du camp sont lancées par ce nœud
         hero.removeAction(forKey: "bob")
@@ -834,6 +905,14 @@ final class WorldScene: SKScene {
             hero.run(.repeatForever(.animate(with: heroFrames("walk"), timePerFrame: 0.16)), withKey: "anim")
             bob(fast: false)
         }
+        makeRoomForCompanion()
+        switch game.activity {
+        case .resting: Audio.shared.play(music: "camp")
+        case .shopping: Audio.shared.play(music: "shop")
+        case .tavern: Audio.shared.play(music: "tavern")
+        case .traveling, .roaming: Audio.shared.play(music: "road")
+        case .exploring(let run): Audio.shared.play(music: run.room.kind == .boss ? "boss" : "dungeon")
+        }
 
         buildWeather()
         buildVisitor()
@@ -852,8 +931,45 @@ final class WorldScene: SKScene {
         case .resting: companionAnim = sleepsAtCamp ? "sleep" : "sit"   // dort avec le héros, sinon assis au feu
         default: companionAnim = "idle"                                  // boutique, taverne : debout
         }
+        companionPose = companionAnim
         layoutCompanion(animation: companionAnim)
         placeScrolling()
+    }
+
+    /// Largeur à l'écran du compagnon actif, ou nil s'il n'y en a pas (ou pas encore de sprites).
+    private var companionWidth: CGFloat? {
+        guard let kind = game.activeCompanion, UIImage(named: kind.frames("walk")[0]) != nil else { return nil }
+        // Largeur de l'animal lui-même : son cadre est bien plus large, pour le bond de l'attaque.
+        let pixels = CompanionArt.bodyWidth[kind.rawValue] ?? Self.texture(kind.frames("walk")[0]).size().width
+        return pixels * Self.heroScale * zoom * 0.72
+    }
+
+    /// Écart entre le milieu du héros et celui du compagnon qui le suit.
+    /// Le cadre du héros est bien plus large que lui : on compte son corps (une cinquantaine
+    /// de pixels), pas son sprite, pour que l'animal se tienne juste derrière sans passer dessous.
+    private func companionGap(_ width: CGFloat) -> CGFloat { 22 * Self.heroScale * zoom + width * 0.5 }
+
+    /// Le héros se tient près du bord, surtout en portrait : avec un compagnon dans son dos, il
+    /// avance d'un pas pour que l'animal tienne à l'écran au lieu de se cacher derrière lui.
+    private func makeRoomForCompanion() {
+        guard let width = companionWidth else { return }
+        // À la taverne et à la boutique rien ne bouge : il peut s'avancer davantage qu'en donjon,
+        // où il faut garder la distance avec le monstre.
+        let limit: CGFloat
+        switch game.activity {
+        // Le compagnon passe au premier plan : un petit pas suffit, sans coller la serveuse ou le marchand.
+        case .tavern: limit = 36
+        case .shopping: limit = 22
+        // En donjon, l'écart avec le monstre passe avant tout : le héros n'avance que d'un pas, et
+        // l'animal se glisse en partie derrière lui (en portrait, tout ne tient pas en entier).
+        case .exploring: limit = 20
+        case .roaming: limit = 46
+        default: return
+        }
+        let wanted = heroPosition.x - facing * companionGap(width)
+        let half = width * 0.5
+        let shift = facing > 0 ? half - wanted : wanted - (size.width - half)
+        if shift > 0 { heroSlot += facing * min(shift, limit * zoom) / playWidth }
     }
 
     /// Place et anime le compagnon derrière le héros, ou le cache s'il n'y en a pas
@@ -861,6 +977,9 @@ final class WorldScene: SKScene {
     private func layoutCompanion(animation: String) {
         companion.removeAction(forKey: "anim")
         companion.removeAction(forKey: "bob")
+        companion.removeAction(forKey: "strike")
+        companion.yScale = 1
+        shownCompanion = game.activeCompanion
         guard let kind = game.activeCompanion,
               UIImage(named: kind.frames("walk")[0]) != nil else {
             companion.isHidden = true
@@ -870,17 +989,43 @@ final class WorldScene: SKScene {
         let moving = animation == "walk"
         // Repli sur idle si l'animation demandée n'est pas encore installée.
         let anim = UIImage(named: kind.frames(animation)[0]) != nil ? animation : "idle"
-        let perFrame: TimeInterval = moving ? 0.12 : (anim == "sleep" ? 0.5 : 0.3)
         let frames = kind.frames(anim).map(Self.texture)
-        companion.run(.repeatForever(.animate(with: frames, timePerFrame: perFrame)), withKey: "anim")
+        let settled = anim == "sit" || anim == "sleep"
+        if settled, let last = frames.last {
+            // Assis ou endormi : une seule pose, la dernière (posture installée). Les images
+            // d'avant le montrent encore en train de s'installer et le feraient se relever
+            // et glisser à chaque boucle. Il respire, c'est tout.
+            companion.texture = last
+            let slow = anim == "sleep"
+            companion.run(.repeatForever(.sequence([
+                .scaleY(to: slow ? 1.035 : 1.02, duration: slow ? 1.3 : 0.9),
+                .scaleY(to: 1, duration: slow ? 1.3 : 0.9),
+            ])), withKey: "anim")
+        } else {
+            companion.run(.repeatForever(.animate(with: frames, timePerFrame: moving ? 0.12 : 0.3)), withKey: "anim")
+        }
 
         let base = Self.texture(kind.frames("walk")[0]).size()
         let scale = Self.heroScale * zoom * 0.72   // un peu plus petit que le héros
         companion.size = CGSize(width: base.width * scale, height: base.height * scale)
-        companion.xScale = facing   // regarde dans le même sens que le héros
-        // Derrière le héros, du côté opposé à celui qu'il regarde.
-        let gap = hero.size.width * 0.5 + companion.size.width * 0.35
-        companion.position = CGPoint(x: heroPosition.x + facing * gap, y: feetY)
+        // Les compagnons sont dessinés tournés vers la gauche, le héros vers la droite :
+        // retournés, ils regardent dans le même sens que lui.
+        companion.xScale = -facing
+        // Derrière le héros, du côté opposé à celui qu'il regarde, sans sortir de l'écran.
+        // Au camp, cela le met côté tente, tourné vers le feu.
+        var body = companionWidth ?? companion.size.width
+        // Couché, il prend plus de place que debout : on s'écarte d'autant du héros.
+        if settled, let rest = CompanionArt.restWidth[kind.rawValue] {
+            body = max(body, rest * Self.heroScale * zoom * 0.72)
+        }
+        let half = body * 0.5
+        // Assis au camp, le héros est plus large que debout : l'animal s'écarte un peu plus.
+        var gap = companionGap(body)
+        if case .resting = game.activity { gap += 12 * zoom }
+        // Dans le dos du héros mais au premier plan, un demi-pas vers nous : là où ils se
+        // recouvrent, c'est l'animal qu'on voit, jamais l'inverse.
+        companion.zPosition = hero.zPosition + 0.5
+        companion.position = CGPoint(x: min(max(heroPosition.x - facing * gap, half), size.width - half), y: feetY - 4 * zoom)
         if moving {
             let lift = max(companion.size.height * 0.02, 1).rounded()
             companion.run(.repeatForever(.sequence([
@@ -910,6 +1055,31 @@ final class WorldScene: SKScene {
 
     /// Le camp peint : on y ajoute le feu animé dans le cercle de pierres et des lucioles.
     /// `fire` : pied du feu dans la scène ; `fireflies` : centre de l'essaim, près du grand arbre.
+    /// Le camp s'étoffe à chaque amélioration du feu : un aménagement par niveau, posé autour des
+    /// flammes (`Art/import_camp.py`). Décalages en points depuis le feu, avant zoom.
+    private func buildCampProps() {
+        let layout: [(level: Int, dx: CGFloat, dy: CGFloat, z: CGFloat, scale: CGFloat)] = [
+            (1, 46, 6, 2.8, 0.55),     // tas de bûches, à droite du feu
+            (2, -56, 24, 1.4, 0.68),   // râtelier d'armes, en retrait entre le héros et le feu
+            (3, 0, 0, 3.3, 0.6),       // marmite sur son trépied, au-dessus des flammes
+            (4, 72, 28, 1.2, 0.72),    // lanterne sur son poteau, au fond à droite
+            (5, 8, 36, 1.0, 0.66),     // trophées, derrière le feu
+        ]
+        for item in layout where item.level <= game.campLevel {
+            let name = "camp_prop_\(item.level)"
+            guard UIImage(named: name) != nil else { continue }
+            let texture = Self.texture(name)
+            let grain = Self.heroScale * zoom * item.scale
+            let node = SKSpriteNode(texture: texture)
+            node.size = CGSize(width: texture.size().width * grain, height: texture.size().height * grain)
+            node.anchorPoint = CGPoint(x: 0.5, y: 0)
+            let x = campFire.x + item.dx * zoom
+            node.position = CGPoint(x: min(x, size.width - node.size.width * 0.5 - 2), y: campFire.y + item.dy * zoom - 8 * zoom)
+            node.zPosition = item.z
+            props.addChild(node)
+        }
+    }
+
     private func buildCamp(fire spot: (CGFloat, CGFloat), fireflies swarm: (CGFloat, CGFloat)) {
         let firePos = scenePoint(spot.0, spot.1)
         campFire = firePos
@@ -951,6 +1121,7 @@ final class WorldScene: SKScene {
             ]))
         }
         props.run(.repeatForever(.sequence([ember, .wait(forDuration: 0.45, withRange: 0.4)])), withKey: "embers")
+        buildCampProps()
 
         // Lucioles autour du grand arbre.
         for index in 0..<7 {
@@ -1117,20 +1288,31 @@ final class WorldScene: SKScene {
 
     private func showEncounter(_ room: Room) {
         encounterShown = true
+        heroBlows = 0
+        // Le héros s'arrête : son compagnon aussi, au lieu de marcher sur place.
+        if !companion.isHidden, room.kind == .monster || room.kind == .boss {
+            companionPose = "idle"
+            layoutCompanion(animation: "idle")
+        }
         pose(heroFrames(room.kind == .monster || room.kind == .boss ? "attack" : "idle")[0])
         // Arrivé sur place, il s'arrête : plus de balancement de marche.
         hero.removeAction(forKey: "bob")
         hero.position = heroPosition
 
         let look = Self.looks[room.sprite] ?? (80, false, 0)
-        let node = Self.sprite(room.sprite, height: look.height * Self.actorScale * zoom)
+        let creature = room.kind == .monster || room.kind == .boss
+        let elite = room.elite == true
+        let bodyHeight = look.height * Self.actorScale * zoom * (elite ? 1.22 : 1)
+        let node = creature ? Self.creature(room.sprite, height: bodyHeight) : Self.sprite(room.sprite, height: bodyHeight)
+        let still = Self.texture(room.sprite).size()
+        encounterBody = creature ? CGSize(width: still.width / max(still.height, 1) * bodyHeight, height: bodyHeight) : node.size
         node.xScale = look.flip ? -1 : 1
         node.zPosition = 3
         encounterLift = look.lift * Self.actorScale * zoom
         node.position = CGPoint(x: size.width + node.size.width, y: feetY + encounterLift)
         props.addChild(node)
         encounter = node
-        let creature = room.kind == .monster || room.kind == .boss
+        encounterSprite = room.sprite
         if !creature {
             // Coffre, piège, autel : posés là, immobiles. Ils n'arrivent pas en glissant.
             node.position.x = encounterPosition.x
@@ -1141,34 +1323,177 @@ final class WorldScene: SKScene {
                 node.run(.repeatForever(.animate(with: Self.npcFrames("shrine", 6), timePerFrame: 0.14)))
             }
         } else {
-            let arrive = SKAction.moveTo(x: encounterPosition.x, duration: 0.25)
+            // Un boss prend son temps : il entre lentement, et le sol tremble quand il s'arrête.
+            let entrance: TimeInterval = room.kind == .boss ? 0.9 : 0.25
+            let arrive = SKAction.moveTo(x: encounterPosition.x, duration: entrance)
             arrive.timingMode = .easeOut
+            if room.kind == .boss { bossEntrance(after: entrance) }
             // Ce qui vole se balance en l'air ; ce qui marche respire sans quitter le sol.
             let idle: SKAction = look.lift > 0
                 ? .sequence([.wait(forDuration: 0.45), .moveBy(x: 0, y: 3, duration: 0),
                              .wait(forDuration: 0.45), .moveBy(x: 0, y: -3, duration: 0)])
                 : .sequence([.wait(forDuration: 0.45), .scaleY(to: 1.03, duration: 0),
                              .wait(forDuration: 0.45), .scaleY(to: 1, duration: 0)])
-            node.run(.sequence([arrive, .repeatForever(idle)]))
+            let frames = Self.creatureFrames(room.sprite, "idle")
+            if frames.isEmpty {
+                node.run(.sequence([arrive, .repeatForever(idle)]))
+            } else {
+                // Créature animée : elle respire image par image ; ce qui vole se balance en plus.
+                node.run(arrive)
+                if look.lift > 0 { node.run(.repeatForever(idle)) }
+                idleCreature(node, room.sprite)
+            }
         }
 
-        let shadowWidth = min(node.size.width * 0.7, 120)
+        let shadowWidth = min(encounterBody.width * 0.7, 120)
         encounterShadow.path = CGPath(ellipseIn: CGRect(x: -shadowWidth / 2, y: -3, width: shadowWidth, height: 12), transform: nil)
         encounterShadow.position = encounterPosition
         encounterShadow.isHidden = false
 
         guard room.kind == .monster || room.kind == .boss else { return }
         let boss = room.kind == .boss
-        hpFill.color = boss ? .systemPurple : .systemRed
+        hpFill.color = boss ? .systemPurple : elite ? .systemOrange : .systemRed
         hpFill.xScale = 1
-        nameText.attributedText = Self.outlined(boss ? "BOSS · \(room.name)" : room.name, size: 14,
-                                                color: boss ? .systemYellow : .white)
+        nameText.attributedText = Self.outlined(boss ? "BOSS · \(room.name)" : elite ? "ÉLITE · \(room.name)" : room.name,
+                                                size: 14, color: boss ? .systemYellow : elite ? .systemOrange : .white)
         // Au-dessus du monstre, sans monter sous l'en-tête posé en haut de la scène.
-        let barTop = feetY + encounterLift + node.size.height + 24
+        let barTop = feetY + encounterLift + encounterBody.height + 24
         // La jauge s'arrête avant les boutons de combat, rangés contre le bord droit de la zone libre.
         hpBar.position = CGPoint(x: min(encounterPosition.x, playWidth - 147), y: min(barTop, size.height - 120))
         hpBar.isHidden = false
-        if boss { showBanner("BOSS !") }
+        if boss {
+            showBanner("BOSS !")
+            Audio.shared.play("boss")
+        }
+        if elite {
+            showBanner("Élite !")
+            Audio.shared.play("elite")
+            // Une teinte orangée qui pulse le distingue du monstre ordinaire.
+            node.run(.repeatForever(.sequence([
+                .colorize(with: .systemOrange, colorBlendFactor: 0.4, duration: 0.6),
+                .colorize(withColorBlendFactor: 0.08, duration: 0.6),
+            ])), withKey: "elite")
+        }
+    }
+
+    /// Images d'un effet animé (`Art/import_vfx.py`).
+    private static func fxFrames(_ name: String) -> [SKTexture] {
+        guard let entry = FXAnims.table[name] else { return [] }
+        return (1...entry.count).map { texture("fx_\(name)_\($0)") }
+    }
+
+    /// Joue un effet animé une fois, à l'échelle des sprites du héros, puis l'efface.
+    /// `sound` : bruitage joué avec l'effet (par défaut celui du même nom, s'il existe) ; "" pour aucun.
+    private func playFX(_ name: String, at point: CGPoint, scale: CGFloat = 1, sound: String? = nil) {
+        let noise = sound ?? name
+        if !noise.isEmpty { Audio.shared.play(noise) }
+        guard let entry = FXAnims.table[name] else { return }
+        let frames = Self.fxFrames(name)
+        let grain = Self.heroScale * zoom * scale
+        let size = frames[0].size()
+        let node = SKSpriteNode(texture: frames[0], size: CGSize(width: size.width * grain, height: size.height * grain))
+        node.anchorPoint = entry.anchor
+        node.position = point
+        effects.addChild(node)
+        let step = 1 / entry.fps
+        // Les dernières images s'estompent : certains effets ne finissent pas tout à fait vides.
+        node.run(.sequence([.wait(forDuration: step * Double(max(frames.count - 2, 1))), .fadeOut(withDuration: step * 2)]))
+        node.run(.sequence([.animate(with: frames, timePerFrame: step), .removeFromParent()]))
+    }
+
+    /// Élément de l'arme portée, d'après sa rareté : glace, ombre ou feu. Rien pour une arme commune.
+    private var weaponElement: String? {
+        switch game.equipped[.weapon]?.rarity {
+        case .rare: "ice"
+        case .epic: "shadow"
+        case .legendary: "fire"
+        default: nil
+        }
+    }
+
+    /// Une arme rare ou mieux entoure le héros d'une aura à son élément, derrière lui.
+    private func refreshAura() {
+        let wanted = weaponElement.map { "aura_\($0)" }
+        guard wanted != auraName else { return }
+        auraName = wanted
+        aura.removeAllActions()
+        guard let wanted, let entry = FXAnims.table[wanted] else { aura.isHidden = true; return }
+        let frames = Self.fxFrames(wanted)
+        let grain = Self.heroScale * zoom * 0.9
+        let size = frames[0].size()
+        aura.texture = frames[0]
+        aura.size = CGSize(width: size.width * grain, height: size.height * grain)
+        aura.anchorPoint = entry.anchor
+        // Discrète : le héros doit rester lisible devant.
+        aura.alpha = wanted == "aura_ice" ? 0.7 : 0.5
+        aura.isHidden = false
+        aura.run(.repeatForever(.animate(with: frames, timePerFrame: 1 / entry.fps)))
+    }
+
+    /// Entrée d'un boss : la salle s'assombrit pendant qu'il approche, puis tout tremble à son arrêt.
+    private func bossEntrance(after delay: TimeInterval) {
+        let veil = SKSpriteNode(color: .black, size: CGSize(width: size.width * 2, height: size.height * 2))
+        veil.position = CGPoint(x: size.width / 2, y: size.height / 2)
+        veil.zPosition = 2.5   // derrière le héros et le boss, devant le décor
+        veil.alpha = 0
+        addChild(veil)
+        veil.run(.sequence([.fadeAlpha(to: 0.45, duration: delay * 0.6), .wait(forDuration: delay * 0.4 + 0.25),
+                            .fadeOut(withDuration: 0.5), .removeFromParent()]))
+        run(.sequence([.wait(forDuration: delay), .run { [weak self] in self?.shake(strength: 7) }]))
+    }
+
+    /// Secousse de l'écran : le décor et ce qui est posé dessus tressautent un instant.
+    private func shake(strength: CGFloat) {
+        var steps: [SKAction] = []
+        var back = CGVector.zero
+        for index in 0..<6 {
+            let power = strength * (1 - CGFloat(index) / 6)
+            let move = CGVector(dx: (index % 2 == 0 ? -1 : 1) * power, dy: .random(in: -power...power) * 0.5)
+            steps.append(.moveBy(x: move.dx, y: move.dy, duration: 0.04))
+            back.dx -= move.dx
+            back.dy -= move.dy
+        }
+        steps.append(.moveBy(x: back.dx, y: back.dy, duration: 0.04))
+        for layer in [backdrop, props] as [SKNode] {
+            layer.removeAction(forKey: "shake")
+            layer.run(.sequence(steps), withKey: "shake")
+        }
+        successHaptic.notificationOccurred(.warning)
+    }
+
+    /// Le compagnon se jette sur le monstre, mord ou griffe, puis revient à sa place.
+    /// Pour le plaisir des yeux : ses bonus sont déjà comptés dans les coups du héros.
+    private func companionStrike() {
+        guard !companion.isHidden, let kind = game.activeCompanion, encounter != nil,
+              companion.action(forKey: "strike") == nil,
+              UIImage(named: kind.frames("attack")[0]) != nil else { return }
+        let frames = kind.frames("attack").map(Self.texture)
+        let home = companion.position.x
+        let reach = encounterPosition.x - encounterBody.width * 0.5 - (companionWidth ?? companion.size.width) * 0.45
+        guard reach > home + 20 else { return }
+        companion.removeAction(forKey: "anim")
+        companion.zPosition = hero.zPosition + 0.5   // il passe devant le héros
+        let leap = SKAction.moveTo(x: reach, duration: 0.16)
+        leap.timingMode = .easeOut
+        let bite = CGPoint(x: encounterPosition.x - encounterBody.width * 0.25,
+                           y: encounterPosition.y + encounterLift + min(encounterBody.height * 0.4, 40))
+        companion.run(.sequence([
+            .group([leap, .animate(with: frames, timePerFrame: 0.055)]),
+            .run { [weak self] in self?.playFX("hit", at: bite, scale: 0.45, sound: "bite") },
+            .wait(forDuration: 0.08),
+            .moveTo(x: home, duration: 0.2),
+            .run { [weak self] in
+                guard let self else { return }
+                self.layoutCompanion(animation: self.companionPose)
+            },
+        ]), withKey: "strike")
+    }
+
+    /// Boucle de respiration d'une créature animée.
+    private func idleCreature(_ node: SKSpriteNode, _ sprite: String) {
+        let frames = Self.creatureFrames(sprite, "idle")
+        guard !frames.isEmpty else { return }
+        node.run(.repeatForever(.animate(with: frames, timePerFrame: 0.22)), withKey: "pose")
     }
 
     /// Joue un coup : celui du héros (animation de classe), ou celui du monstre qui bondit.
@@ -1177,19 +1502,45 @@ final class WorldScene: SKScene {
         guard let target = encounter else { return }
         if blow.byHero {
             let impact = attack()
+            heroBlows += 1
+            // Un coup sur deux, le compagnon suit l'assaut du héros.
+            if heroBlows % 2 == 0 {
+                run(.sequence([.wait(forDuration: impact + 0.12), .run { [weak self] in self?.companionStrike() }]))
+            }
             run(.sequence([.wait(forDuration: impact), .run { [weak self, weak target] in
                 guard let self, let target, target === self.encounter else { return }
                 self.hpFill.run(.scaleX(to: CGFloat(max(blow.foeLeft, 0.02)), duration: 0.15))
                 self.floatText("-\(Int(blow.damage))", color: .white, size: 22, over: self.encounterPosition,
-                               height: self.encounterLift + target.size.height * 0.55)
+                               height: self.encounterLift + encounterBody.height * 0.55)
+                // Le monstre encaisse : il recule d'un cran, puis reprend sa place.
+                if target.action(forKey: "lunge") == nil {
+                    target.run(.sequence([.moveBy(x: 7, y: 0, duration: 0.05), .moveBy(x: -7, y: 0, duration: 0.12)]),
+                               withKey: "recoil")
+                }
+                // L'impact prend l'élément de l'arme : glace, ombre ou feu.
+                self.playFX(self.weaponElement ?? "hit", at: CGPoint(
+                    x: self.encounterPosition.x,
+                    y: self.encounterPosition.y + self.encounterLift + min(self.encounterBody.height * 0.5, 54)),
+                    // Mesuré sur la créature : un rat ne disparaît pas sous l'explosion.
+                    scale: min(max(self.encounterBody.height / 110, 0.5), 0.9))
             }]))
         } else {
             // Le monstre bondit vers le héros, puis revient à sa place.
-            let lunge = min(max(target.position.x - heroPosition.x - target.size.width * 0.5 - 30, 10), 60)
+            let lunge = min(max(target.position.x - heroPosition.x - encounterBody.width * 0.5 - 30, 10), 60)
             target.run(.sequence([
                 .moveBy(x: -lunge, y: 0, duration: 0.12),
                 .moveBy(x: lunge, y: 0, duration: 0.18),
             ]), withKey: "lunge")
+            let sprite = encounterSprite
+            let swing = Self.creatureFrames(sprite, "attack")
+            if !swing.isEmpty {
+                // Son geste d'attaque tient dans le bond, puis elle reprend son souffle.
+                target.run(.sequence([.animate(with: swing, timePerFrame: 0.3 / Double(swing.count)),
+                                      .run { [weak self, weak target] in
+                                          guard let self, let target else { return }
+                                          self.idleCreature(target, sprite)
+                                      }]), withKey: "pose")
+            }
             run(.sequence([.wait(forDuration: 0.12), .run { [weak self] in
                 guard let self else { return }
                 if blow.potion {
@@ -1200,6 +1551,8 @@ final class WorldScene: SKScene {
                 self.floatText("-\(Int(blow.damage))", color: UIColor(red: 1, green: 0.32, blue: 0.3, alpha: 1), size: 22,
                                over: self.heroPosition, height: self.hero.size.height + 4)
                 self.flash(self.hero)
+                self.playFX("hit", at: CGPoint(x: self.heroPosition.x + 6, y: self.heroPosition.y + self.hero.size.height * 0.5),
+                            scale: 0.55, sound: "hurt")
                 let pose = self.heroFrames("attack")[0]
                 self.hero.run(.sequence([.setTexture(self.heroFrames("hurt")[0]), .moveBy(x: -6, y: 0, duration: 0.06),
                                          .moveBy(x: 6, y: 0, duration: 0.1), .wait(forDuration: 0.15),
@@ -1240,14 +1593,14 @@ final class WorldScene: SKScene {
         case .archer: release = 6
         case .mage: release = 7
         }
-        let aim = CGPoint(x: encounterPosition.x, y: encounterPosition.y + encounterLift + min(target.size.height * 0.5, 54))
+        let aim = CGPoint(x: encounterPosition.x, y: encounterPosition.y + encounterLift + min(encounterBody.height * 0.5, 54))
         let hand = CGPoint(x: heroPosition.x + hero.size.width * 0.35, y: heroPosition.y + hero.size.height * 0.5)
         var travel: TimeInterval = 0
 
         switch game.heroLook {
         case .warrior:
             // Il bondit vers le monstre pendant qu'il lève l'épée, frappe, puis revient.
-            let reach = max(encounterPosition.x - heroPosition.x - target.size.width * 0.35 - 70, 20)
+            let reach = max(encounterPosition.x - heroPosition.x - encounterBody.width * 0.35 - 70, 20)
             special.run(.sequence([
                 .wait(forDuration: step * 2),
                 .moveBy(x: reach, y: 0, duration: step * Double(release - 2)),
@@ -1291,14 +1644,51 @@ final class WorldScene: SKScene {
             guard let self, let target else { return }
             self.flash(target)
             self.hpFill.run(.scaleX(to: 0.02, duration: 0.2))
+            self.playFX("crit", at: aim, scale: 1.2)
             self.floatText("CRITIQUE !", color: .systemYellow, size: 24, over: self.encounterPosition,
-                           height: self.encounterLift + target.size.height * 0.6)
+                           height: self.encounterLift + encounterBody.height * 0.6)
             target.run(.sequence([.moveBy(x: 8, y: 0, duration: 0.04), .moveBy(x: -16, y: 0, duration: 0.08),
                                   .moveBy(x: 8, y: 0, duration: 0.04)]))
         }]))
     }
 
     /// Rend la main au héros si un coup spécial est en cours (fin de l'animation, changement de scène).
+    /// Donjon terminé : le héros brandit son arme quelques instants, dans la salle du boss,
+    /// avant que la scène ne passe au trajet du retour (le voyage, lui, a déjà commencé).
+    private func celebrate() {
+        let hold: TimeInterval = 2.6
+        victoryUntil = lastUpdate + hold
+        endSpecial()
+        hero.removeAction(forKey: "anim")
+        hero.removeAction(forKey: "dash")
+        hero.position = heroPosition
+        let names = game.heroLook.frames("victory")
+        guard UIImage(named: names[0]) != nil else {
+            // Pas encore d'animation : il saute de joie.
+            let hop = SKAction.sequence([.moveBy(x: 0, y: 14, duration: 0.14), .moveBy(x: 0, y: -14, duration: 0.18),
+                                         .wait(forDuration: 0.12)])
+            hero.run(.repeat(hop, count: 5), withKey: "anim")
+            return
+        }
+        let frames = names.map(Self.texture)
+        let scale = Self.heroScale * zoom
+        let size = frames[0].size()
+        let pose = SKSpriteNode(texture: frames[0], size: CGSize(width: size.width * scale, height: size.height * scale))
+        pose.anchorPoint = CGPoint(x: 0.5, y: 0)
+        pose.position = heroPosition
+        pose.xScale = facing
+        pose.zPosition = hero.zPosition + 0.1
+        specialSprite = pose
+        addChild(pose)
+        hero.alpha = 0
+        // Il lève son arme, puis la tient levée en trépignant jusqu'au départ.
+        let cheer = SKAction.sequence([.moveBy(x: 0, y: 5, duration: 0.12), .moveBy(x: 0, y: -5, duration: 0.14),
+                                       .wait(forDuration: 0.1)])
+        pose.run(.sequence([.wait(forDuration: 0.35), .animate(with: frames, timePerFrame: 0.09),
+                            .repeatForever(cheer)]))
+        playFX("levelup", at: heroPosition, scale: 0.9, sound: "victory")
+    }
+
     private func endSpecial() {
         specialSprite?.removeFromParent()
         specialSprite = nil
@@ -1365,26 +1755,23 @@ final class WorldScene: SKScene {
         let tempo = 1 / (1 + max(game.speedBonus, 0))
         let frames = heroFrames("attack")
         hero.run(.sequence([.animate(with: frames, timePerFrame: 0.07 * tempo), .setTexture(frames[0])]), withKey: "anim")
-        let aim = CGPoint(x: encounterPosition.x, y: encounterPosition.y + encounterLift + min(target.size.height * 0.5, 54))
+        let aim = CGPoint(x: encounterPosition.x, y: encounterPosition.y + encounterLift + min(encounterBody.height * 0.5, 54))
         let hand = CGPoint(x: heroPosition.x + hero.size.width * 0.3, y: heroPosition.y + hero.size.height * 0.55)
         let impact: TimeInterval
 
         switch game.heroLook {
         case .warrior:
             impact = 0.14 * tempo
-            let reach = max(encounterPosition.x - heroPosition.x - target.size.width * 0.35 - 60, 20)
+            let reach = max(encounterPosition.x - heroPosition.x - encounterBody.width * 0.35 - 60, 20)
             hero.run(.sequence([
                 .moveTo(x: heroPosition.x + reach, duration: 0.12 * tempo),
                 .wait(forDuration: 0.12 * tempo),
                 .moveTo(x: heroPosition.x, duration: 0.16 * tempo),
             ]), withKey: "dash")
-            let slash = SKSpriteNode(texture: Self.texture("fx_slash"), size: CGSize(width: 64, height: 56))
-            slash.position = aim
-            slash.alpha = 0
-            effects.addChild(slash)
-            slash.run(.sequence([.wait(forDuration: impact), .fadeIn(withDuration: 0.02),
-                                 .group([.scale(to: 1.25, duration: 0.18), .fadeOut(withDuration: 0.18)]),
-                                 .removeFromParent()]))
+            // Le croissant de la lame part un peu avant l'impact.
+            run(.sequence([.wait(forDuration: max(impact - 0.06, 0)), .run { [weak self] in
+                self?.playFX("slash", at: aim, scale: 0.8)
+            }]))
         case .archer:
             impact = 0.3 * tempo
             let arrow = SKShapeNode(rectOf: CGSize(width: 26, height: 3), cornerRadius: 1)
@@ -1444,9 +1831,11 @@ final class WorldScene: SKScene {
             burst("fx_heal", height: 60, at: heroPosition)
         case .fled(let reason):
             showBanner(reason == .exhausted ? "Épuisé !" : "Fuite !")
+            Audio.shared.play("flee")
         case .dungeonCleared:
             showBanner("Donjon terminé !")
             successHaptic.notificationOccurred(.success)
+            celebrate()
         case .skill:
             specialStrike()
         case .treated(let order):
@@ -1456,6 +1845,7 @@ final class WorldScene: SKScene {
             floatText(order == .stew ? "Miam" : "+ moral", color: .systemPink, size: 18, over: heroPosition, height: 96)
         case let .bought(sprite, price, caption):
             showPurchase(sprite: sprite, price: price, caption: caption)
+            Audio.shared.play("buy")
         case .sold(let gold):
             showSale(gold)
         case .cared(let fed):
@@ -1500,6 +1890,15 @@ final class WorldScene: SKScene {
 
     /// Effet ponctuel posé au sol, qui grandit un peu puis s'efface.
     private func burst(_ sprite: String, height: CGFloat, at point: CGPoint) {
+        // Soin et montée de niveau ont leur version animée ; `height` donne l'ampleur voulue.
+        if sprite == "fx_heal", FXAnims.table["heal"] != nil {
+            playFX("heal", at: CGPoint(x: point.x, y: point.y + 36 * zoom), scale: height / 60)
+            return
+        }
+        if sprite == "fx_levelup", FXAnims.table["levelup"] != nil {
+            playFX("levelup", at: point, scale: max(height / 90, 0.75))
+            return
+        }
         let node = Self.sprite(sprite, height: height)
         node.position = point
         node.alpha = 0.95
@@ -1536,14 +1935,30 @@ final class WorldScene: SKScene {
             if room.knockedOut {
                 node.run(.sequence([.wait(forDuration: 0.5), .fadeOut(withDuration: 0.3), .removeFromParent()]))
             } else {
-                node.run(.sequence([
-                    .group([
-                        .fadeOut(withDuration: 0.25),
-                        .moveBy(x: 0, y: -8, duration: 0.25),
-                        .scaleY(to: 0.4, duration: 0.25),
-                    ]),
-                    .removeFromParent(),
-                ]))
+                Audio.shared.play("death")
+                let death = Self.creatureFrames(room.sprite, "death")
+                if death.isEmpty {
+                    node.run(.sequence([
+                        .group([
+                            .fadeOut(withDuration: 0.25),
+                            .moveBy(x: 0, y: -8, duration: 0.25),
+                            .scaleY(to: 0.4, duration: 0.25),
+                        ]),
+                        .removeFromParent(),
+                    ]))
+                } else {
+                    // Elle s'effondre image par image, reste un instant à terre, puis s'efface.
+                    // Ce qui volait tombe au sol.
+                    let fall = SKAction.moveBy(x: 0, y: -encounterLift, duration: 0.3)
+                    fall.timingMode = .easeIn
+                    node.run(fall)
+                    node.run(.sequence([
+                        .animate(with: death, timePerFrame: 0.06),
+                        .wait(forDuration: 0.25),
+                        .fadeOut(withDuration: 0.3),
+                        .removeFromParent(),
+                    ]))
+                }
                 burstCoins(count: room.kind == .boss ? 12 : 4, gold: room.gold)
             }
         case .chest:
@@ -1554,6 +1969,7 @@ final class WorldScene: SKScene {
                 .repeat(jostle, count: 3),
                 .run { [weak self] in
                     node.texture = Self.texture("chest_open")
+                    Audio.shared.play("chest")
                     self?.burstCoins(count: 8, gold: room.gold)
                 },
                 .wait(forDuration: 0.6), .fadeOut(withDuration: 0.3), .removeFromParent(),
@@ -1566,6 +1982,7 @@ final class WorldScene: SKScene {
             }
             // Les pics jaillissent d'un coup, la dalle tremble, puis tout s'efface.
             node.texture = Self.texture("trap_spikes_up")
+            Audio.shared.play("trap")
             node.run(.sequence([
                 .repeat(.sequence([.moveBy(x: 3, y: 0, duration: 0.03), .moveBy(x: -3, y: 0, duration: 0.03)]), count: 3),
                 .wait(forDuration: 0.4), .fadeOut(withDuration: 0.3), .removeFromParent(),
@@ -1578,6 +1995,7 @@ final class WorldScene: SKScene {
 
     private func burstCoins(count: Int, gold: Double) {
         guard gold > 0 else { return }
+        Audio.shared.play("coin")
         let origin = CGPoint(x: encounterPosition.x, y: encounterPosition.y + 30)
         for _ in 0..<count {
             let coin = SKSpriteNode(texture: Self.texture("ui_coin"), size: CGSize(width: 18, height: 18))

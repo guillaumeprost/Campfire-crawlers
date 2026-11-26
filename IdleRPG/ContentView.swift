@@ -197,6 +197,9 @@ struct ContentView: View {
             if tab == .gear { game.markLootSeen() }
         }
         .confirmationDialog("Options", isPresented: $showOptions, titleVisibility: .hidden) {
+            Button(Audio.shared.muted ? "Activer le son" : "Couper le son") {
+                Audio.shared.setMuted(!Audio.shared.muted)
+            }
             if game.isTestSpeed {
                 Button("Désactiver le mode test") { game.setTestSpeed(1) }
             }
