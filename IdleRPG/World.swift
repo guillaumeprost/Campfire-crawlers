@@ -138,19 +138,20 @@ enum HeroClass: String, Codable, CaseIterable, Identifiable {
     var perks: [String] {
         switch self {
         case .warrior: ["+30\u{00A0}% de PV"]
-        case .archer: ["+25\u{00A0}% de vitesse", "+25\u{00A0}% de chance au butin", "+10\u{00A0}% de PV"]
-        case .mage: ["+25\u{00A0}% d'attaque", "-5\u{00A0}% de PV"]
+        case .archer: ["+25\u{00A0}% de vitesse", "+25\u{00A0}% de chance au butin", "+15\u{00A0}% de PV"]
+        case .mage: ["+25\u{00A0}% d'attaque"]
         }
     }
 
-    // PV : l'archer gagne un léger +10 % et le mage ne perd plus que 5 %, pour que les
+    // PV : l'archer gagne +15 % et le mage n'en perd plus (réglage du 2026-11-27 : avec le butin
+    // des autres classes compté, ils finissaient le jeu 10 à 25 % après le guerrier), pour que les
     // trois classes finissent le jeu en un temps comparable (équilibré via Outils/equilibrage.py :
     // la survie, pas les dégâts, était le goulot qui faisait traîner archer et mage).
     var hpFactor: Double {
         switch self {
         case .warrior: 1.3
-        case .archer: 1.1
-        case .mage: 0.95
+        case .archer: 1.15
+        case .mage: 1
         }
     }
 
@@ -239,31 +240,33 @@ enum CompanionKind: String, Codable, CaseIterable, Identifiable {
     /// Bonus affichés dans la fiche et le sélecteur.
     var perks: [String] {
         switch self {
-        case .wolf: ["+15\u{00A0}% d'attaque", "+10\u{00A0}% d'attaque en donjon"]
-        case .panther: ["+12\u{00A0}% de vitesse", "+10\u{00A0}% de chance"]
-        case .bear: ["+20\u{00A0}% de PV max", "repos au feu plus rapide"]
-        case .fox: ["+10\u{00A0}% de chance de fuite", "pièges 30\u{00A0}% moins douloureux"]
-        case .stag: ["trajets 20\u{00A0}% plus courts", "repos au feu un peu plus rapide"]
+        case .wolf: ["+6\u{00A0}% d'attaque", "+4\u{00A0}% d'attaque en donjon"]
+        case .panther: ["+15\u{00A0}% de vitesse", "+25\u{00A0}% de chance"]
+        case .bear: ["+10\u{00A0}% de PV max", "repos au feu 30\u{00A0}% plus rapide"]
+        case .fox: ["+12\u{00A0}% de chance de fuite", "pièges deux fois moins douloureux"]
+        case .stag: ["trajets 30\u{00A0}% plus courts", "repos au feu 30\u{00A0}% plus rapide"]
         }
     }
 
-    // Bonus appliqués aux stats du héros (voir GameState).
+    // Bonus appliqués aux stats du héros (voir GameState). Réglés le 2026-11-27 avec
+    // Outils/equilibrage.py : le loup (+26 % d'attaque) divisait la durée du jeu par deux, la
+    // panthère et le cerf ne changeaient presque rien. Chacun raccourcit maintenant le jeu d'un quart environ.
     /// Facteur multiplicatif d'attaque en permanence.
-    var attackFactor: Double { self == .wolf ? 1.15 : 1 }
+    var attackFactor: Double { self == .wolf ? 1.06 : 1 }
     /// Facteur d'attaque supplémentaire, seulement en donjon (le loup devient agressif).
-    var dungeonAttackFactor: Double { self == .wolf ? 1.10 : 1 }
-    var hpFactor: Double { self == .bear ? 1.20 : 1 }
+    var dungeonAttackFactor: Double { self == .wolf ? 1.04 : 1 }
+    var hpFactor: Double { self == .bear ? 1.10 : 1 }
     /// Fractions ajoutées aux bonus du héros.
-    var speedBonus: Double { self == .panther ? 0.12 : 0 }
-    var luckBonus: Double { self == .panther ? 0.10 : 0 }
+    var speedBonus: Double { self == .panther ? 0.15 : 0 }
+    var luckBonus: Double { self == .panther ? 0.25 : 0 }
     /// Facteur multiplicatif sur la vitesse de repos au camp.
-    var restFactor: Double { self == .bear ? 1.5 : self == .stag ? 1.15 : 1 }
+    var restFactor: Double { self == .bear || self == .stag ? 1.3 : 1 }
     /// Points ajoutés à la chance de fuite : le renard sent venir les ennuis.
-    var escapeBonus: Double { self == .fox ? 0.10 : 0 }
+    var escapeBonus: Double { self == .fox ? 0.12 : 0 }
     /// Part des dégâts de piège réellement subie.
-    var trapFactor: Double { self == .fox ? 0.7 : 1 }
+    var trapFactor: Double { self == .fox ? 0.5 : 1 }
     /// Facteur sur la durée des trajets : le cerf mène par les raccourcis.
-    var travelFactor: Double { self == .stag ? 0.8 : 1 }
+    var travelFactor: Double { self == .stag ? 0.7 : 1 }
 
     /// Noms des images d'une animation : walk (8 images), attack (6), idle / sit / sleep (4).
     func frames(_ animation: String) -> [String] {

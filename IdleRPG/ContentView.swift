@@ -25,6 +25,8 @@ struct ContentView: View {
     /// Hauteur du panneau replié : activité, signes vitaux et onglets.
     private static let compactPanel: CGFloat = 250
     @State private var detent: PresentationDetent = .height(ContentView.compactPanel)
+    /// Hauteur du panneau avant qu'une rencontre ne l'ouvre en grand pour sa fête.
+    @State private var detentBeforeFeast: PresentationDetent?
 
     /// Largeur du panneau latéral en paysage.
     private static let sidePanel: CGFloat = 370
@@ -182,6 +184,16 @@ struct ContentView: View {
             }
         }
         .animation(.easeOut(duration: 0.25), value: game.celebration)
+        // Une rencontre (image en pixels) est un événement : le panneau s'ouvre en grand le temps de la fête.
+        .onChange(of: game.celebration) { old, new in
+            if new?.image != nil, old?.image == nil {
+                detentBeforeFeast = detent
+                detent = .large
+            } else if new?.image == nil, let before = detentBeforeFeast {
+                detentBeforeFeast = nil
+                withAnimation(.snappy) { detent = before }
+            }
+        }
         .onChange(of: tab) { _, newTab in
             if newTab == .gear { game.markLootSeen() }
         }
@@ -321,7 +333,7 @@ struct ContentView: View {
     private var placeImage: String {
         switch game.activity {
         case .resting: WorldScene.campImage
-        case .shopping: "scene_marche"
+        case .shopping: "scene_etal"
         case .tavern: WorldScene.tavernImage
         case .traveling: "scene_trajet"
         case .roaming: UIImage(named: "scene_campagne") != nil ? "scene_campagne" : "scene_trajet"

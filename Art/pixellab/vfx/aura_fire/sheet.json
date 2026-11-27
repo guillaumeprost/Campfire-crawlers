@@ -1,231 +1,231 @@
 {
  "frames": [
   {
-   "filename": "cc-aura-fire 0.png",
+   "filename": "aura-feu-v2 0.png",
    "frame": {
     "x": 0,
     "y": 0,
-    "w": 78,
-    "h": 105
+    "w": 84,
+    "h": 107
    },
    "rotated": false,
    "trimmed": false,
    "spriteSourceSize": {
     "x": 0,
     "y": 0,
-    "w": 78,
-    "h": 105
+    "w": 84,
+    "h": 107
    },
    "sourceSize": {
-    "w": 78,
-    "h": 105
+    "w": 84,
+    "h": 107
    },
    "pivot": {
     "x": 0.5,
-    "y": 0.8380952380952381
+    "y": 0.8317757009345794
    },
    "duration": 83
   },
   {
-   "filename": "cc-aura-fire 1.png",
+   "filename": "aura-feu-v2 1.png",
    "frame": {
-    "x": 78,
+    "x": 84,
     "y": 0,
-    "w": 78,
-    "h": 105
+    "w": 84,
+    "h": 107
    },
    "rotated": false,
    "trimmed": false,
    "spriteSourceSize": {
     "x": 0,
     "y": 0,
-    "w": 78,
-    "h": 105
+    "w": 84,
+    "h": 107
    },
    "sourceSize": {
-    "w": 78,
-    "h": 105
+    "w": 84,
+    "h": 107
    },
    "pivot": {
     "x": 0.5,
-    "y": 0.8380952380952381
+    "y": 0.8317757009345794
    },
    "duration": 83
   },
   {
-   "filename": "cc-aura-fire 2.png",
+   "filename": "aura-feu-v2 2.png",
    "frame": {
-    "x": 156,
+    "x": 168,
     "y": 0,
-    "w": 78,
-    "h": 105
+    "w": 84,
+    "h": 107
    },
    "rotated": false,
    "trimmed": false,
    "spriteSourceSize": {
     "x": 0,
     "y": 0,
-    "w": 78,
-    "h": 105
+    "w": 84,
+    "h": 107
    },
    "sourceSize": {
-    "w": 78,
-    "h": 105
+    "w": 84,
+    "h": 107
    },
    "pivot": {
     "x": 0.5,
-    "y": 0.8380952380952381
+    "y": 0.8317757009345794
    },
    "duration": 83
   },
   {
-   "filename": "cc-aura-fire 3.png",
+   "filename": "aura-feu-v2 3.png",
    "frame": {
     "x": 0,
-    "y": 105,
-    "w": 78,
-    "h": 105
+    "y": 107,
+    "w": 84,
+    "h": 107
    },
    "rotated": false,
    "trimmed": false,
    "spriteSourceSize": {
     "x": 0,
     "y": 0,
-    "w": 78,
-    "h": 105
+    "w": 84,
+    "h": 107
    },
    "sourceSize": {
-    "w": 78,
-    "h": 105
+    "w": 84,
+    "h": 107
    },
    "pivot": {
     "x": 0.5,
-    "y": 0.8380952380952381
+    "y": 0.8317757009345794
    },
    "duration": 83
   },
   {
-   "filename": "cc-aura-fire 4.png",
+   "filename": "aura-feu-v2 4.png",
    "frame": {
-    "x": 78,
-    "y": 105,
-    "w": 78,
-    "h": 105
+    "x": 84,
+    "y": 107,
+    "w": 84,
+    "h": 107
    },
    "rotated": false,
    "trimmed": false,
    "spriteSourceSize": {
     "x": 0,
     "y": 0,
-    "w": 78,
-    "h": 105
+    "w": 84,
+    "h": 107
    },
    "sourceSize": {
-    "w": 78,
-    "h": 105
+    "w": 84,
+    "h": 107
    },
    "pivot": {
     "x": 0.5,
-    "y": 0.8380952380952381
+    "y": 0.8317757009345794
    },
    "duration": 83
   },
   {
-   "filename": "cc-aura-fire 5.png",
+   "filename": "aura-feu-v2 5.png",
    "frame": {
-    "x": 156,
-    "y": 105,
-    "w": 78,
-    "h": 105
+    "x": 168,
+    "y": 107,
+    "w": 84,
+    "h": 107
    },
    "rotated": false,
    "trimmed": false,
    "spriteSourceSize": {
     "x": 0,
     "y": 0,
-    "w": 78,
-    "h": 105
+    "w": 84,
+    "h": 107
    },
    "sourceSize": {
-    "w": 78,
-    "h": 105
+    "w": 84,
+    "h": 107
    },
    "pivot": {
     "x": 0.5,
-    "y": 0.8380952380952381
+    "y": 0.8317757009345794
    },
    "duration": 83
   },
   {
-   "filename": "cc-aura-fire 6.png",
+   "filename": "aura-feu-v2 6.png",
    "frame": {
     "x": 0,
-    "y": 210,
-    "w": 78,
-    "h": 105
+    "y": 214,
+    "w": 84,
+    "h": 107
    },
    "rotated": false,
    "trimmed": false,
    "spriteSourceSize": {
     "x": 0,
     "y": 0,
-    "w": 78,
-    "h": 105
+    "w": 84,
+    "h": 107
    },
    "sourceSize": {
-    "w": 78,
-    "h": 105
+    "w": 84,
+    "h": 107
    },
    "pivot": {
     "x": 0.5,
-    "y": 0.8380952380952381
+    "y": 0.8317757009345794
    },
    "duration": 83
   },
   {
-   "filename": "cc-aura-fire 7.png",
+   "filename": "aura-feu-v2 7.png",
    "frame": {
-    "x": 78,
-    "y": 210,
-    "w": 78,
-    "h": 105
+    "x": 84,
+    "y": 214,
+    "w": 84,
+    "h": 107
    },
    "rotated": false,
    "trimmed": false,
    "spriteSourceSize": {
     "x": 0,
     "y": 0,
-    "w": 78,
-    "h": 105
+    "w": 84,
+    "h": 107
    },
    "sourceSize": {
-    "w": 78,
-    "h": 105
+    "w": 84,
+    "h": 107
    },
    "pivot": {
     "x": 0.5,
-    "y": 0.8380952380952381
+    "y": 0.8317757009345794
    },
    "duration": 83
   }
  ],
  "meta": {
   "app": "PixelLab VFX Creator",
-  "image": "cc-aura-fire.png",
+  "image": "aura-feu-v2.png",
   "format": "RGBA8888",
   "size": {
-   "w": 234,
-   "h": 315
+   "w": 252,
+   "h": 321
   },
   "scale": "1",
   "anchor": {
    "kind": "origin",
-   "x": 39,
-   "y": 88
+   "x": 42,
+   "y": 89
   },
   "frameTags": [
    {
-    "name": "cc-aura-fire",
+    "name": "aura-feu-v2",
     "from": 0,
     "to": 7,
     "direction": "forward"

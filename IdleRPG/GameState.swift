@@ -115,6 +115,7 @@ final class GameState {
     @ObservationIgnored private var debugAutoSkill = false
     /// Partagé avec la copie qui prévoit la suite : la prévision doit voir les mêmes élites.
     static var debugElite = false
+    static var debugStray = false
     static var debugBoss = false
     #endif
     /// Mode Hardcore : un héros vaincu meurt pour de bon et laisse un héritage.
@@ -241,6 +242,8 @@ final class GameState {
         debugAutoSkill = defaults.bool(forKey: "debugSkill")
         // Tests : `-debugElite YES` fait de chaque monstre (hors première salle) un élite.
         Self.debugElite = defaults.bool(forKey: "debugElite")
+        // Tests : `-debugStray YES` fait de chaque trouvaille en balade la rencontre d'un compagnon inconnu.
+        Self.debugStray = defaults.bool(forKey: "debugStray")
         Self.debugBoss = defaults.bool(forKey: "debugBoss")
         // Tests : `-debugWeapon rare|epic|legendary` met en main une arme de cette rareté (même bonus
         // que l'arme portée), pour voir l'aura et les impacts de son élément.
@@ -300,6 +303,8 @@ final class GameState {
         }
         // Tests : `-debugSleepy YES` mine le moral : au camp, héros et compagnon s'endorment.
         if defaults.bool(forKey: "debugSleepy") { mood = 20 }
+        // Avec `-debugStray`, les compagnons déjà connus sont oubliés (sauf celui qui accompagne le héros).
+        if Self.debugStray { unlockedCompanions = Set([activeCompanion?.rawValue].compactMap { $0 }) }
         // Tests : `-debugCompanion fox` apprivoise ce compagnon et le met aux côtés du héros.
         if let companion = defaults.string(forKey: "debugCompanion").flatMap(CompanionKind.init(rawValue:)) {
             unlockedCompanions.insert(companion.rawValue)
@@ -787,6 +792,12 @@ final class GameState {
         note(.find)
         let named = companion.theName.prefix(1).uppercased() + companion.theName.dropFirst()
         log("pawprint.fill", "\(named) se joint à \(name) en chemin !", .good)
+        // Une rencontre est un événement : on la fête, même découverte au retour dans le jeu.
+        if !isForecast {
+            celebration = Celebration(symbol: "pawprint.fill", headline: "Nouveau compagnon", title: companion.name,
+                                      gold: 0, image: "companion_\(companion.rawValue)_idle_1",
+                                      details: [companion.motto] + companion.perks)
+        }
         if live { onEvent?(.companionFound(companion)) }
     }
 
@@ -1562,7 +1573,7 @@ final class GameState {
     private func findSomething(_ roam: inout Roam, live: Bool) {
         // Rare rencontre (~5 %) : un compagnon encore inconnu croise la route du héros.
         let strays = CompanionKind.allCases.filter { !unlockedCompanions.contains($0.rawValue) }
-        if !strays.isEmpty, Double.random(in: 0..<1, using: &rng) < 0.05 {
+        if !strays.isEmpty, Double.random(in: 0..<1, using: &rng) < 0.05 || Self.debugStray {
             let companion = strays[Int.random(in: 0..<strays.count, using: &rng)]
             tameCompanion(companion, live: live)
             roam.found["compagnon", default: 0] += 1
@@ -2514,6 +2525,9 @@ final class GameState {
         var warnAt: TimeInterval?
         /// Une fois arrêté : moment où la faim ou la soif commenceront à le ronger.
         var starvesAt: TimeInterval?
+        /// Rencontre d'un compagnon en balade : quand, et lequel.
+        var companionAt: TimeInterval?
+        var companion: CompanionKind?
     }
 
     /// Rejoue la suite sur une copie du jeu. Les tirages étant reproductibles,
@@ -2565,7 +2579,13 @@ final class GameState {
             var room: TimeInterval = 0
             if case .exploring(let run) = activity { room = run.roomEnd - run.roomStart }
             if parked, result.starvesAt == nil, isStarving { result.starvesAt = time }
+            let pack = unlockedCompanions
             handleEvent(live: false)
+            if result.companionAt == nil, generation == lineage,
+               let met = unlockedCompanions.subtracting(pack).first.flatMap(CompanionKind.init(rawValue:)) {
+                result.companionAt = time
+                result.companion = met
+            }
             if generation != lineage {
                 result.diesAt = time
                 result.fate = lastFate
@@ -2755,6 +2775,12 @@ final class GameState {
                     id: "hero.visitor", date: date(arrives), title: visit.kind.notice,
                     body: "Il ne restera que deux heures. À vous de voir ce que \(name) en fait."))
             }
+        }
+        if let met = ahead.companionAt, met > clockNow, let companion = ahead.companion {
+            let named = companion.theName.prefix(1).uppercased() + companion.theName.dropFirst()
+            plan.notifications.append(PlannedNotification(
+                id: "hero.companion", date: date(met), title: "Un compagnon !",
+                body: "\(named) s'est joint à \(name) en chemin. \(companion.motto)."))
         }
         if let fork = ahead.forkAt, fork > clockNow {
             plan.notifications.append(PlannedNotification(
@@ -3084,7 +3110,8 @@ extension GameState {
                        "hero.starving": "exclamationmark.triangle.fill", "hero.dying": "heart.slash.fill",
                        "hero.fork": "signpost.right.and.left.fill", "hero.bored": "cloud.rain.fill",
                        "hero.visitor": "person.fill.questionmark"]
-        let upcoming = notes.filter { $0.date > now }
+        // La rencontre d'un compagnon reste une surprise : elle n'est pas annoncée d'avance.
+        let upcoming = notes.filter { $0.date > now && $0.id != "hero.companion" }
             .sorted { $0.date < $1.date }
             .map { HeroWidgetData.Upcoming(date: $0.date, title: $0.title, symbol: symbols[$0.id] ?? "bell.fill") }
         var frames: [HeroWidgetData.Frame] = []
@@ -3099,7 +3126,8 @@ extension GameState {
     }
 
     /// Joue la suite sur la copie et prend une image du héros à intervalles réguliers :
-    /// toutes les cinq minutes sur quatorze heures, toutes les trente secondes en mode test.
+    /// toutes les cinq minutes sur quatorze heures, toutes les trente secondes en mode test,
+    /// plus une image à l'instant de chaque événement du héros (arrivée, salle, sortie, retour).
     /// Un pas plus serré rafraîchit le widget et la complication deux fois plus souvent ; la
     /// fenêtre de 14 h couvre largement la nuit entre deux passages, et la chronologie envoyée
     /// à la montre reste bien sous la limite de l'`updateApplicationContext` (~262 ko).
@@ -3113,6 +3141,7 @@ extension GameState {
         let frozenNeeds = (hunger: hunger, thirst: thirst, mood: mood)
         let start = clock
         var frames: [HeroWidgetData.Frame] = []
+        var eventFrames = 0
         for index in 0..<count {
             let target = start + Double(index) * every * timeScale
             var steps = 0
@@ -3120,8 +3149,28 @@ extension GameState {
             while generation == lineage, let time = nextEventTime, time <= target, steps < 500 {
                 steps += 1
                 lastEvent = time
+                // Un événement du héros (arrivée au donjon, salle suivante, sortie, retour au camp),
+                // et non un simple seuil de faim ou un changement de temps.
+                let heroEvent = activityEventTime.map { $0 <= time } ?? false
                 pass(to: time)
                 handleEvent(live: false)
+                // Le widget change à l'instant même de l'événement, sans attendre la prochaine image
+                // de la grille (jusqu'à cinq minutes plus tard).
+                if heroEvent, generation == lineage, time > start, eventFrames < 60 {
+                    eventFrames += 1
+                    settleRest()
+                    uiClock = clock
+                    frames.append(widgetFrame(at: now.addingTimeInterval((time - start) / timeScale), needs: frozenNeeds))
+                    // Dans une salle, le héros marche puis se bat : une image aussi quand le combat commence.
+                    if case .exploring(let run) = activity {
+                        let fight = run.roomStart + (run.roomEnd - run.roomStart) * Self.walkShare + timeScale
+                        if fight > clock, fight < target, fight < nextEventTime ?? .infinity {
+                            pass(to: fight)
+                            uiClock = clock
+                            frames.append(widgetFrame(at: now.addingTimeInterval((fight - start) / timeScale), needs: frozenNeeds))
+                        }
+                    }
+                }
             }
             if generation != lineage {
                 // Le héros meurt avant la prochaine image : la dernière sera sa tombe.

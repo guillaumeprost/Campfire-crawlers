@@ -5,9 +5,9 @@ import CoreGraphics
 /// et hauteur d'une image en pixels.
 enum FXAnims {
     static let table: [String: (count: Int, fps: Double, anchor: CGPoint, height: CGFloat)] = [
-        "aura_fire": (8, 12.0, CGPoint(x: 0.5, y: 0.162), 105),
-        "aura_ice": (8, 8.0, CGPoint(x: 0.528, y: 0.167), 84),
-        "aura_shadow": (8, 8.0, CGPoint(x: 0.514, y: 0.103), 117),
+        "aura_fire": (8, 12.0, CGPoint(x: 0.5, y: 0.168), 107),
+        "aura_ice": (8, 12.0, CGPoint(x: 0.5, y: 0.168), 107),
+        "aura_shadow": (12, 12.0, CGPoint(x: 0.506, y: 0.118), 119),
         "coins": (11, 13.0, CGPoint(x: 0.42, y: 0.593), 81),
         "crit": (7, 15.9, CGPoint(x: 0.528, y: 0.57), 93),
         "fire": (11, 14.1, CGPoint(x: 0.487, y: 0.5), 78),

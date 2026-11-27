@@ -1,233 +1,337 @@
 {
  "frames": [
   {
-   "filename": "cc-aura-shadow 0.png",
+   "filename": "aura-ombre-v2 0.png",
    "frame": {
     "x": 0,
     "y": 0,
-    "w": 72,
-    "h": 117
+    "w": 79,
+    "h": 119
    },
    "rotated": false,
    "trimmed": false,
    "spriteSourceSize": {
     "x": 0,
     "y": 0,
-    "w": 72,
-    "h": 117
+    "w": 79,
+    "h": 119
    },
    "sourceSize": {
-    "w": 72,
-    "h": 117
+    "w": 79,
+    "h": 119
    },
    "pivot": {
-    "x": 0.5138888888888888,
-    "y": 0.8974358974358975
+    "x": 0.5063291139240507,
+    "y": 0.8823529411764706
    },
-   "duration": 125
+   "duration": 83
   },
   {
-   "filename": "cc-aura-shadow 1.png",
+   "filename": "aura-ombre-v2 1.png",
    "frame": {
-    "x": 72,
+    "x": 79,
     "y": 0,
-    "w": 72,
-    "h": 117
+    "w": 79,
+    "h": 119
    },
    "rotated": false,
    "trimmed": false,
    "spriteSourceSize": {
     "x": 0,
     "y": 0,
-    "w": 72,
-    "h": 117
+    "w": 79,
+    "h": 119
    },
    "sourceSize": {
-    "w": 72,
-    "h": 117
+    "w": 79,
+    "h": 119
    },
    "pivot": {
-    "x": 0.5138888888888888,
-    "y": 0.8974358974358975
+    "x": 0.5063291139240507,
+    "y": 0.8823529411764706
    },
-   "duration": 125
+   "duration": 83
   },
   {
-   "filename": "cc-aura-shadow 2.png",
+   "filename": "aura-ombre-v2 2.png",
    "frame": {
-    "x": 144,
+    "x": 158,
     "y": 0,
-    "w": 72,
-    "h": 117
+    "w": 79,
+    "h": 119
    },
    "rotated": false,
    "trimmed": false,
    "spriteSourceSize": {
     "x": 0,
     "y": 0,
-    "w": 72,
-    "h": 117
+    "w": 79,
+    "h": 119
    },
    "sourceSize": {
-    "w": 72,
-    "h": 117
+    "w": 79,
+    "h": 119
    },
    "pivot": {
-    "x": 0.5138888888888888,
-    "y": 0.8974358974358975
+    "x": 0.5063291139240507,
+    "y": 0.8823529411764706
    },
-   "duration": 125
+   "duration": 83
   },
   {
-   "filename": "cc-aura-shadow 3.png",
+   "filename": "aura-ombre-v2 3.png",
    "frame": {
-    "x": 0,
-    "y": 117,
-    "w": 72,
-    "h": 117
+    "x": 237,
+    "y": 0,
+    "w": 79,
+    "h": 119
    },
    "rotated": false,
    "trimmed": false,
    "spriteSourceSize": {
     "x": 0,
     "y": 0,
-    "w": 72,
-    "h": 117
+    "w": 79,
+    "h": 119
    },
    "sourceSize": {
-    "w": 72,
-    "h": 117
+    "w": 79,
+    "h": 119
    },
    "pivot": {
-    "x": 0.5138888888888888,
-    "y": 0.8974358974358975
+    "x": 0.5063291139240507,
+    "y": 0.8823529411764706
    },
-   "duration": 125
+   "duration": 83
   },
   {
-   "filename": "cc-aura-shadow 4.png",
+   "filename": "aura-ombre-v2 4.png",
    "frame": {
-    "x": 72,
-    "y": 117,
-    "w": 72,
-    "h": 117
+    "x": 0,
+    "y": 119,
+    "w": 79,
+    "h": 119
    },
    "rotated": false,
    "trimmed": false,
    "spriteSourceSize": {
     "x": 0,
     "y": 0,
-    "w": 72,
-    "h": 117
+    "w": 79,
+    "h": 119
    },
    "sourceSize": {
-    "w": 72,
-    "h": 117
+    "w": 79,
+    "h": 119
    },
    "pivot": {
-    "x": 0.5138888888888888,
-    "y": 0.8974358974358975
+    "x": 0.5063291139240507,
+    "y": 0.8823529411764706
    },
-   "duration": 125
+   "duration": 83
   },
   {
-   "filename": "cc-aura-shadow 5.png",
+   "filename": "aura-ombre-v2 5.png",
    "frame": {
-    "x": 144,
-    "y": 117,
-    "w": 72,
-    "h": 117
+    "x": 79,
+    "y": 119,
+    "w": 79,
+    "h": 119
    },
    "rotated": false,
    "trimmed": false,
    "spriteSourceSize": {
     "x": 0,
     "y": 0,
-    "w": 72,
-    "h": 117
+    "w": 79,
+    "h": 119
    },
    "sourceSize": {
-    "w": 72,
-    "h": 117
+    "w": 79,
+    "h": 119
    },
    "pivot": {
-    "x": 0.5138888888888888,
-    "y": 0.8974358974358975
+    "x": 0.5063291139240507,
+    "y": 0.8823529411764706
    },
-   "duration": 125
+   "duration": 83
   },
   {
-   "filename": "cc-aura-shadow 6.png",
+   "filename": "aura-ombre-v2 6.png",
    "frame": {
-    "x": 0,
-    "y": 234,
-    "w": 72,
-    "h": 117
+    "x": 158,
+    "y": 119,
+    "w": 79,
+    "h": 119
    },
    "rotated": false,
    "trimmed": false,
    "spriteSourceSize": {
     "x": 0,
     "y": 0,
-    "w": 72,
-    "h": 117
+    "w": 79,
+    "h": 119
    },
    "sourceSize": {
-    "w": 72,
-    "h": 117
+    "w": 79,
+    "h": 119
    },
    "pivot": {
-    "x": 0.5138888888888888,
-    "y": 0.8974358974358975
+    "x": 0.5063291139240507,
+    "y": 0.8823529411764706
    },
-   "duration": 125
+   "duration": 83
   },
   {
-   "filename": "cc-aura-shadow 7.png",
+   "filename": "aura-ombre-v2 7.png",
    "frame": {
-    "x": 72,
-    "y": 234,
-    "w": 72,
-    "h": 117
+    "x": 237,
+    "y": 119,
+    "w": 79,
+    "h": 119
    },
    "rotated": false,
    "trimmed": false,
    "spriteSourceSize": {
     "x": 0,
     "y": 0,
-    "w": 72,
-    "h": 117
+    "w": 79,
+    "h": 119
    },
    "sourceSize": {
-    "w": 72,
-    "h": 117
+    "w": 79,
+    "h": 119
    },
    "pivot": {
-    "x": 0.5138888888888888,
-    "y": 0.8974358974358975
+    "x": 0.5063291139240507,
+    "y": 0.8823529411764706
    },
-   "duration": 125
+   "duration": 83
+  },
+  {
+   "filename": "aura-ombre-v2 8.png",
+   "frame": {
+    "x": 0,
+    "y": 238,
+    "w": 79,
+    "h": 119
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 79,
+    "h": 119
+   },
+   "sourceSize": {
+    "w": 79,
+    "h": 119
+   },
+   "pivot": {
+    "x": 0.5063291139240507,
+    "y": 0.8823529411764706
+   },
+   "duration": 83
+  },
+  {
+   "filename": "aura-ombre-v2 9.png",
+   "frame": {
+    "x": 79,
+    "y": 238,
+    "w": 79,
+    "h": 119
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 79,
+    "h": 119
+   },
+   "sourceSize": {
+    "w": 79,
+    "h": 119
+   },
+   "pivot": {
+    "x": 0.5063291139240507,
+    "y": 0.8823529411764706
+   },
+   "duration": 83
+  },
+  {
+   "filename": "aura-ombre-v2 10.png",
+   "frame": {
+    "x": 158,
+    "y": 238,
+    "w": 79,
+    "h": 119
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 79,
+    "h": 119
+   },
+   "sourceSize": {
+    "w": 79,
+    "h": 119
+   },
+   "pivot": {
+    "x": 0.5063291139240507,
+    "y": 0.8823529411764706
+   },
+   "duration": 83
+  },
+  {
+   "filename": "aura-ombre-v2 11.png",
+   "frame": {
+    "x": 237,
+    "y": 238,
+    "w": 79,
+    "h": 119
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 79,
+    "h": 119
+   },
+   "sourceSize": {
+    "w": 79,
+    "h": 119
+   },
+   "pivot": {
+    "x": 0.5063291139240507,
+    "y": 0.8823529411764706
+   },
+   "duration": 83
   }
  ],
  "meta": {
   "app": "PixelLab VFX Creator",
-  "image": "cc-aura-shadow.png",
+  "image": "aura-ombre-v2.png",
   "format": "RGBA8888",
   "size": {
-   "w": 216,
-   "h": 351
+   "w": 316,
+   "h": 357
   },
   "scale": "1",
   "anchor": {
    "kind": "origin",
-   "x": 37,
+   "x": 40,
    "y": 105
   },
   "frameTags": [
    {
-    "name": "cc-aura-shadow",
+    "name": "aura-ombre-v2",
     "from": 0,
-    "to": 7,
+    "to": 11,
     "direction": "forward"
    }
   ]

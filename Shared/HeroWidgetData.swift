@@ -4,7 +4,8 @@ import Foundation
 ///
 /// Comme pour l'activité en direct, le jeu ne peut pas réveiller les widgets une fois fermé :
 /// il rejoue donc la suite sur une copie de lui-même et écrit d'avance une image du héros
-/// toutes les dix minutes. Chaque widget affiche celle de l'heure qu'il est.
+/// toutes les cinq minutes, et une à l'instant de chaque événement (arrivée au donjon, salle
+/// suivante, sortie, retour au camp). Chaque widget affiche celle de l'heure qu'il est.
 struct HeroWidgetData: Codable, Hashable {
     /// Le héros à un instant donné.
     struct Frame: Codable, Hashable {

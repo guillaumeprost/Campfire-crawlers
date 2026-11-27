@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Une récompense à fêter : succès débloqué ou quête du jour accomplie.
+/// Un moment à fêter : succès débloqué, quête du jour accomplie, compagnon rencontré.
 struct Celebration: Identifiable, Equatable {
     let id = UUID()
     let symbol: String
@@ -8,6 +8,10 @@ struct Celebration: Identifiable, Equatable {
     let headline: String
     let title: String
     let gold: Double
+    /// Image en pixels montrée à la place de la médaille (un compagnon, par exemple).
+    var image: String? = nil
+    /// Lignes affichées à la place de l'or quand il n'y en a pas.
+    var details: [String] = []
 }
 
 /// La fête : une médaille dorée jaillit entre des rayons qui tournent, sous une pluie de confettis,
@@ -21,7 +25,7 @@ struct CelebrationView: View {
 
     var body: some View {
         ZStack {
-            Color.black.opacity(shown ? 0.55 : 0)
+            Color.black.opacity(shown ? (celebration.image == nil ? 0.55 : 0.85) : 0)
                 .ignoresSafeArea()
 
             Confetti()
@@ -32,9 +36,15 @@ struct CelebrationView: View {
                     Rays()
                         .frame(width: 230, height: 230)
                         .opacity(shown ? 1 : 0)
-                    Medal(symbol: celebration.symbol)
-                        .scaleEffect(shown ? 1 : 0.2)
-                        .rotationEffect(.degrees(shown ? 0 : -40))
+                    if let image = celebration.image {
+                        PixelImage(name: image, size: 190)
+                            .shadow(color: .yellow.opacity(0.7), radius: 24)
+                            .scaleEffect(shown ? 1 : 0.2)
+                    } else {
+                        Medal(symbol: celebration.symbol)
+                            .scaleEffect(shown ? 1 : 0.2)
+                            .rotationEffect(.degrees(shown ? 0 : -40))
+                    }
                 }
                 VStack(spacing: 6) {
                     Text(celebration.headline.uppercased())
@@ -45,16 +55,23 @@ struct CelebrationView: View {
                         .font(.title2.weight(.heavy))
                         .multilineTextAlignment(.center)
                         .foregroundStyle(.white)
-                    HStack(spacing: 6) {
-                        CoinIcon(size: 22)
-                        Text("+\(celebration.gold.short)")
-                            .font(.title.weight(.black))
-                            .monospacedDigit()
-                            .contentTransition(.numericText(value: textShown ? celebration.gold : 0))
+                    if celebration.gold > 0 {
+                        HStack(spacing: 6) {
+                            CoinIcon(size: 22)
+                            Text("+\(celebration.gold.short)")
+                                .font(.title.weight(.black))
+                                .monospacedDigit()
+                                .contentTransition(.numericText(value: textShown ? celebration.gold : 0))
+                        }
+                        .foregroundStyle(.yellow)
+                        .shadow(color: .orange.opacity(0.8), radius: 10)
+                        .padding(.top, 4)
                     }
-                    .foregroundStyle(.yellow)
-                    .shadow(color: .orange.opacity(0.8), radius: 10)
-                    .padding(.top, 4)
+                    ForEach(celebration.details, id: \.self) { line in
+                        Text(line)
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(.white.opacity(0.85))
+                    }
                 }
                 .padding(.horizontal, 24)
                 .opacity(textShown ? 1 : 0)
@@ -68,14 +85,17 @@ struct CelebrationView: View {
             withAnimation(.spring(response: 0.45, dampingFraction: 0.55)) { shown = true }
             try? await Task.sleep(for: .milliseconds(250))
             withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) { textShown = true }
-            try? await Task.sleep(for: .milliseconds(2_300))
+            // Une rencontre se savoure plus longtemps qu'une prime.
+            try? await Task.sleep(for: .milliseconds(celebration.image == nil ? 2_300 : 4_500))
             // Remplacée entre-temps par une autre récompense : c'est la nouvelle qui décidera.
             guard !Task.isCancelled else { return }
             dismiss()
         }
         .transition(.opacity.combined(with: .scale(scale: 1.05)))
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(celebration.headline) : \(celebration.title), plus \(celebration.gold.short) or")
+        .accessibilityLabel(celebration.gold > 0
+                            ? "\(celebration.headline) : \(celebration.title), plus \(celebration.gold.short) or"
+                            : "\(celebration.headline) : \(([celebration.title] + celebration.details).joined(separator: ", "))")
         .accessibilityAddTraits(.isButton)
     }
 }

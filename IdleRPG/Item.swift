@@ -145,11 +145,12 @@ enum Rarity: Int, Codable, CaseIterable {
 
     var color: Color { Color(uiColor) }
 
-    /// Tirage pondéré. La chance du héros gonfle les raretés au-dessus de commun.
+    /// Tirage pondéré. La chance du héros gonfle les raretés au-dessus de commun : pleinement pour
+    /// l'épique et le légendaire, à moitié pour le rare, qui sinon tombait plus souvent que le commun.
     static func roll<G: RandomNumberGenerator>(floor: Rarity, luck: Double, using rng: inout G) -> Rarity {
         let boost = 1 + luck
         let weights: [(Rarity, Double)] = [
-            (.common, 60), (.rare, 28 * boost), (.epic, 10 * boost), (.legendary, 2 * boost),
+            (.common, 60), (.rare, 28 * (1 + luck * 0.5)), (.epic, 10 * boost), (.legendary, 2 * boost),
         ].filter { $0.0.rawValue >= floor.rawValue }
         var pick = Double.random(in: 0..<weights.reduce(0) { $0 + $1.1 }, using: &rng)
         for (rarity, weight) in weights {

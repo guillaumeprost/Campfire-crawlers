@@ -3,7 +3,8 @@
 À tenir à jour avec le jeu. Lancer : python3 Outils/equilibrage.py [nombre de parties]
 Il simule un joueur qui passe quatre fois par jour, de prudent à téméraire, jusqu'à la fin du jeu.
 
-Simulés : la nuit et la météo (Ambient.swift). Pas encore simulés : les reliques, l'héritage choisi
+Simulés : la nuit et la météo (Ambient.swift), les compagnons (play(..., companion='wolf')), le butin
+d'une autre classe, et le coup spécial d'un joueur qui regarde (P['skill_presence']). Pas encore simulés : les reliques, l'héritage choisi
 (le successeur reçoit toujours un quart de l'or) et les visiteurs du camp."""
 import math, random, statistics, sys
 
@@ -39,6 +40,9 @@ P = dict(  # paramètres réglables
     wet_rest=0.75, fog_travel=1.15, storm_travel=1.25, fog_escape=0.10,
     # Économie : part de la valeur d'un objet rendue à la revente, progression de l'or par rang
     # (les monstres, eux, suivent rank_factor), prix de base, quêtes du jour réclamées (or × 3^(palier-1)).
+    skill_presence=0.0,   # part des sorties que le joueur regarde (il y déclenche le coup spécial)
+    luck_rare=0.5,        # part de la chance qui gonfle le poids des objets rares (épiques et légendaires : toute)
+    own_class=0.7,        # part des armes, armures et casques trouvés qui vont à la classe du héros
     resale=0.3, gold_rank=1.2, potion=45, bedroll=400, quest=25, quests_per_day=2,
     mode='off',   # 'off' : règles d'avant ; 'idle' : joueur absent ; 'active' : joueur attentif ;
                   # 'tavern' : joueur absent qui emmène le héros à la taverne quand le moral flanche
@@ -50,8 +54,18 @@ DUNGEONS = [
     dict(travel=360, duration=3600, rooms=24, hp=600, dmg=28, gold=140, xp=120),
     dict(travel=600, duration=7200, rooms=36, hp=1800, dmg=55, gold=420, xp=320),
 ]
-CLASSES = {'warrior': (1.3, 1, 0, 0), 'archer': (1.1, 1, 0.25, 0.25), 'mage': (0.95, 1.25, 0, 0)}
+CLASSES = {'warrior': (1.3, 1, 0, 0), 'archer': (1.15, 1, 0.25, 0.25), 'mage': (1.0, 1.25, 0, 0)}
 BASE = {'weapon': [4, 10, 28, 80, 230], 'helmet': [2, 2, 3, 3, 4], 'armor': [2, 3, 4, 5, 6], 'amulet': [25, 60, 140, 320, 750], 'ring': [8, 12, 16, 20, 25], 'boots': [5, 8, 11, 14, 17]}
+# Compagnons (World.swift, CompanionKind) : attaque, attaque en donjon, PV, vitesse, chance, repos,
+# fuite, pièges, trajets.
+COMPANIONS = {
+    None:      dict(atk=1,    datk=1,   hp=1,   spd=0,    lck=0,   rest=1,    esc=0,   trap=1,   travel=1),
+    'wolf':    dict(atk=1.06, datk=1.04, hp=1,  spd=0,    lck=0,   rest=1,    esc=0,   trap=1,   travel=1),
+    'panther': dict(atk=1,    datk=1,   hp=1,   spd=0.15, lck=0.25, rest=1,   esc=0,   trap=1,   travel=1),
+    'bear':    dict(atk=1,    datk=1,   hp=1.1, spd=0,    lck=0,   rest=1.3,  esc=0,   trap=1,   travel=1),
+    'fox':     dict(atk=1,    datk=1,   hp=1,   spd=0,    lck=0,   rest=1,    esc=0.12, trap=0.5, travel=1),
+    'stag':    dict(atk=1,    datk=1,   hp=1,   spd=0,    lck=0,   rest=1.3,  esc=0,   trap=1,   travel=0.7),
+}
 CAP = {'boots': 60, 'ring': 150, 'armor': 30, 'helmet': 15}
 RARITY = [(1, 4), (1.5, 10), (2.2, 25), (3.5, 70)]
 
@@ -81,8 +95,9 @@ class Item:
     def forge_cost(s): return round(s.value * P['forge_cost'] * P['forge_growth'] ** s.forge)
 
 class Game:
-    def __init__(s, cls, seed):
+    def __init__(s, cls, seed, companion=None):
         s.r = random.Random(seed)
+        s.c = COMPANIONS[companion]
         s.hpf, s.atkf, s.spd, s.lck = CLASSES[cls]
         s.level, s.xp, s.gold = 1, 0.0, 0.0
         s.gear = {}; s.potions = 0; s.bedroll = False; s.fire = 0; s.injured = False
@@ -90,9 +105,9 @@ class Game:
         s.hunger, s.mood, s.charge, s.boss_kills = 80.0, 70.0, 0.0, 0
         s.thirst, s.deaths = 80.0, 0
         s.hp = s.maxhp(); s.energy = 100.0; s.t = 0.0
-        s.first = {}; s.st = dict(runs=0, fled=0, exhausted=0, rest=0.0, travel=0.0, explore=0.0, spent=0.0, lost_items=0, lost_gold=0.0, earned=0.0, tavern=0.0, deaths=0, needs=0.0)
+        s.first = {}; s.loot = dict(drops=0, kept=0, rar=[0] * 4); s.st = dict(skills=0, resale=0.0, runs=0, fled=0, exhausted=0, rest=0.0, travel=0.0, explore=0.0, spent=0.0, lost_items=0, lost_gold=0.0, earned=0.0, tavern=0.0, deaths=0, needs=0.0)
     def g(s, slot): return s.gear[slot].eff() if slot in s.gear else 0
-    def maxhp(s): return round((100 + 20 * (s.level - 1) + s.g('amulet')) * s.hpf)
+    def maxhp(s): return round((100 + 20 * (s.level - 1) + s.g('amulet')) * s.hpf * s.c['hp'])
     def condition(s):
         if P['mode'] == 'off': return 1.0
         f = 1.0
@@ -113,11 +128,13 @@ class Game:
             while s.hunger < 50: s.hunger = min(s.hunger + 40, 100)
             while s.thirst < 50: s.thirst = min(s.thirst + 50, 100)
             s.cheer(15 * seconds / 1800)
-    def attack(s): return round((10 + 3 * (s.level - 1) + s.g('weapon')) * s.atkf * s.condition())
-    def speed(s): return s.g('boots') / 100 + s.spd
-    def luck(s): return s.g('ring') / 100 + s.lck
+    def attack(s, level=None, dungeon=True):
+        return round((10 + 3 * ((level or s.level) - 1) + s.g('weapon')) * s.atkf * s.condition()
+                     * s.c['atk'] * (s.c['datk'] if dungeon else 1))
+    def speed(s): return s.g('boots') / 100 + s.spd + s.c['spd']
+    def luck(s): return s.g('ring') / 100 + s.lck + s.c['lck']
     def xpneed(s): return round(30 * P['xp_growth'] ** (s.level - 1))
-    def boost(s): return (1.5 if s.bedroll else 1) * (1 + P['fire_step'] * s.fire)
+    def boost(s): return (1.5 if s.bedroll else 1) * (1 + P['fire_step'] * s.fire) * s.c['rest']
     def unlocked(s):
         out = []
         for i in range(5):
@@ -127,13 +144,16 @@ class Game:
     def item(s, tier, rank, floor=0, luck=0.0, r=None):
         r = r or s.r
         slot = r.choice(list(BASE))
-        b = 1 + luck; w = [x for x in [(0, 60), (1, 28 * b), (2, 10 * b), (3, 2 * b)] if x[0] >= floor]
+        b = 1 + luck; w = [x for x in [(0, 60), (1, 28 * (1 + luck * P['luck_rare'])), (2, 10 * b), (3, 2 * b)] if x[0] >= floor]
         p = r.uniform(0, sum(x[1] for x in w)); rar = floor
         for k, x in w:
             if p < x: rar = k; break
             p -= x
         bonus = BASE[slot][tier - 1] * RARITY[rar][0] * r.uniform(0.85, 1.15) * P['item_factor'] ** (rank - 1)
         if slot in CAP: bonus = min(bonus, CAP[slot])
+        s.loot['rar'][rar] += 1; s.loot['drops'] += 1
+        # Arme, armure et casque sont parfois (30 %) ceux d'une autre classe : bons à revendre.
+        if slot in ('weapon', 'armor', 'helmet') and r.random() >= P['own_class']: slot = 'other'
         return Item(slot, max(round(bonus), 1), math.ceil(DUNGEONS[tier - 1]['gold'] * RARITY[rar][1] * P['item_factor'] ** (rank - 1)))
     def rest(s, seconds):
         # Heure par heure : on dort mieux la nuit, moins bien sous la pluie.
@@ -165,13 +185,13 @@ class Game:
             s.xp -= s.xpneed(); s.level += 1; s.hp += round(20 * s.hpf)
     def receive(s, it):
         cur = s.gear.get(it.slot)
-        if cur is None or it.eff() > cur.eff():
+        if it.slot != 'other' and (cur is None or it.eff() > cur.eff()):
             ratio = s.hp / s.maxhp()
-            if cur: s.gold += cur.value * P['resale']; s.st['earned'] += cur.value * P['resale']
-            s.gear[it.slot] = it
+            if cur: s.gold += cur.value * P['resale']; s.st['earned'] += cur.value * P['resale']; s.st['resale'] += cur.value * P['resale']
+            s.gear[it.slot] = it; s.loot['kept'] += 1
             if it.slot == 'amulet': s.hp = max(round(s.maxhp() * ratio), 1)
         else:
-            s.gold += it.value * P['resale']; s.st['earned'] += it.value * P['resale']
+            s.gold += it.value * P['resale']; s.st['earned'] += it.value * P['resale']; s.st['resale'] += it.value * P['resale']
     def expedition(s, i, rank, r, real):
         """Joue une sortie. Renvoie l'issue ; si real, applique les gains."""
         d = DUNGEONS[i]; k = scale(rank); kg = gold_scale(rank)
@@ -186,7 +206,10 @@ class Game:
         # Temps passé dans le donjon, en salles : un coffre s'ouvre plus vite qu'un combat.
         spent = 0.0
         # Heure d'entrée et durée d'une salle : la nuit, les monstres frappent plus fort et paient mieux.
-        way = d['travel'] / (1 + s.speed()) * P['time_factor'] * travel_factor(s.t)
+        way = d['travel'] / (1 + s.speed()) * P['time_factor'] * travel_factor(s.t) * s.c['travel']
+        # Le joueur regarde-t-il cette sortie ? S'il est là, il garde le coup spécial pour le boss
+        # ou pour un combat perdu d'avance (GameState.useSkill : le monstre tombe sur-le-champ).
+        watching = real and r.random() < P['skill_presence']
         pace = d['duration'] / (1 + s.speed()) / d['rooms'] * P['time_factor']
         for room in range(d['rooms']):
             kind = 'boss' if room == d['rooms'] - 1 else 'monster' if room == 0 else None
@@ -206,8 +229,8 @@ class Game:
                 if elite: fhp *= P['elite_hp']; fdm *= P['elite_dmg']
                 dmg = round(fdm * max(math.ceil(fhp / atk_now) - 1, 0.25) * spread * taken)
                 # Joueur attentif : coup spécial sur le boss, ou pour éviter une défaite.
-                if new and real and P['mode'] == 'active' and charge >= 1 and (boss or dmg >= hp):
-                    charge, dmg = 0, round(dmg * 0.2)
+                if new and real and (P['mode'] == 'active' or watching) and charge >= 1 and (boss or dmg >= hp):
+                    charge, dmg = 0, round(dmg * 0.2); s.st['skills'] += 1
                 if dmg >= hp and (potions == 0 or dmg >= hp + heal()): hp = wounded; ko = True
                 else:
                     if dmg >= hp: potions -= 1; hp += heal()
@@ -223,13 +246,13 @@ class Game:
                     xp += d['xp'] * k * (5 if boss else 1) * (P['elite_xp'] if elite else 1)
                     while xp >= round(30 * P['xp_growth'] ** (level - 1)):
                         xp -= round(30 * P['xp_growth'] ** (level - 1)); level += 1; hp += round(20 * s.hpf)
-                        maxhp = round((100 + 20 * (level - 1) + s.g('amulet')) * s.hpf); atk = round((10 + 3 * (level - 1) + s.g('weapon')) * s.atkf)
+                        maxhp = round((100 + 20 * (level - 1) + s.g('amulet')) * s.hpf * s.c['hp']); atk = s.attack(level)
             elif kind == 'chest':
                 gold += round(d['gold'] * kg * 4 * spread * gmul * P['coin_mult'])
                 spent -= 1 - P['chest_time']
                 if real and r.random() < min(P['chest_item'] * (1 + s.luck()), 0.95): loot.append(s.item(i + 1, rank, 0, s.luck(), r))
             elif kind == 'trap':
-                dmg = round(d['dmg'] * k * 1.5 * spread * taken)
+                dmg = round(d['dmg'] * k * 1.5 * spread * taken * s.c['trap'])
                 if dmg >= hp: hp = wounded; ko = True
                 else: hp = max(hp - dmg, 1)
             else:
@@ -259,7 +282,7 @@ class Game:
             s.hp, s.energy, s.potions = hp, energy, potions
             s.xp = 0; s.level = level; s.xp = xp
             # Le retour se fait par le temps qu'il fait à la sortie du donjon.
-            back = d['travel'] / (1 + s.speed()) * P['time_factor'] * travel_factor(s.t + way + spent * pace)
+            back = d['travel'] / (1 + s.speed()) * P['time_factor'] * travel_factor(s.t + way + spent * pace) * s.c['travel']
             dur = way + spent * pace + back
             if P['mode'] == 'session':
                 # Le héros emporte des provisions : il mange et boit en route, le joueur les a payées.
@@ -335,7 +358,7 @@ class Game:
             c -= P['escape_empty'] if need <= 0 else P['escape_needy'] if need < 25 else 0
         if s.injured: c -= P['escape_injured']
         if weather(s.t) == 'fog': c += P['fog_escape']
-        c += s.g('boots') / P['boots_div'] + s.g('ring') / P['ring_div'] + s.g('helmet') / 100
+        c += s.c['esc'] + s.g('boots') / P['boots_div'] + s.g('ring') / P['ring_div'] + s.g('helmet') / 100
         return min(max(c, 0.05), 0.97)
     def die(s):
         s.deaths += 1; s.st['deaths'] += 1
@@ -391,8 +414,8 @@ def next_session(t):
         if at >= t: return at
     return (day + 1) * 86400 + P['sessions'][0] * 3600
 
-def play(cls, seed, threshold, limit=40 * 86400, goal=(4, 1)):
-    g = Game(cls, seed)
+def play(cls, seed, threshold, limit=40 * 86400, goal=(4, 1), companion=None):
+    g = Game(cls, seed, companion)
     while g.t < limit and goal not in g.first:
         if P['mode'] == 'session':
             # Le héros rentre, se repose, puis attend que le joueur repasse.

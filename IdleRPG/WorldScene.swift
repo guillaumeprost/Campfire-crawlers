@@ -851,7 +851,10 @@ final class WorldScene: SKScene {
             ]
             hero.run(.repeatForever(.sequence(loop)), withKey: "anim")
         case .shopping:
-            setBackdrop(backdrop("scene_marche", floor: 0.86, portraitFloor: 0.87, scrolls: false))
+            // L'étal en forêt, comme en portrait. `scene_marche` (16:9) est une rue de ville : elle ne sert
+            // qu'à la version verticale `scene_marche_portrait`, qui montre bien l'étal.
+            setBackdrop(isPortrait ? backdrop("scene_marche", floor: 0.86, portraitFloor: 0.87, scrolls: false)
+                                   : backdrop("scene_etal", floor: 0.86, portraitFloor: 0.87, scrolls: false))
             heroSlot = scenePoint(isPortrait ? 0.30 : 0.36, 0).x / playWidth
             buildShop()
             // Devant l'étal, il reste debout (et non en pleine foulée).
@@ -1290,7 +1293,8 @@ final class WorldScene: SKScene {
         encounterShown = true
         heroBlows = 0
         // Le héros s'arrête : son compagnon aussi, au lieu de marcher sur place.
-        if !companion.isHidden, room.kind == .monster || room.kind == .boss {
+        // Vaut pour toute salle (coffre, piège, sanctuaire, carrefour), pas seulement les combats.
+        if !companion.isHidden {
             companionPose = "idle"
             layoutCompanion(animation: "idle")
         }
@@ -1419,13 +1423,14 @@ final class WorldScene: SKScene {
         aura.removeAllActions()
         guard let wanted, let entry = FXAnims.table[wanted] else { aura.isHidden = true; return }
         let frames = Self.fxFrames(wanted)
-        let grain = Self.heroScale * zoom * 0.9
+        // Plus haute que le héros : les flammes doivent dépasser de ses épaules pour se voir derrière lui.
+        let grain = Self.heroScale * zoom * 1.1
         let size = frames[0].size()
         aura.texture = frames[0]
         aura.size = CGSize(width: size.width * grain, height: size.height * grain)
         aura.anchorPoint = entry.anchor
-        // Discrète : le héros doit rester lisible devant.
-        aura.alpha = wanted == "aura_ice" ? 0.7 : 0.5
+        // Un peu translucide : le héros et son compagnon restent lisibles devant.
+        aura.alpha = 0.7
         aura.isHidden = false
         aura.run(.repeatForever(.animate(with: frames, timePerFrame: 1 / entry.fps)))
     }
